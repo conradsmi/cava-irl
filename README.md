@@ -13,4 +13,8 @@ During execution, cirl allows users to...
 Most importantly, since cirl sends data over a network to the RPI, you can __control the LEDs via the internet__ so long as the RPI is running cirlservice.
 
 ## Installation
-(to be written)
+__NOTE:__ This build is in an experimental state. Expect some bugs.
+
+1. Firstly, make sure you read this guide (in its entirety) on how to set up the hardware required: https://dordnung.de/raspberrypi-ledstrip/ (although the author forgot to mention it, you will also need some adapters to connect the male jumper cables to the LED, like this: https://www.amazon.com/iCreating-Connector-Conductor-Controller-Solderless/dp/B074G48LWQ)
+
+1. (to be continued)
