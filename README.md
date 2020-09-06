@@ -2,7 +2,7 @@
 An audio visualizer for SMD5050 LEDs using Raspberry Pi (RPI).
 
 ### How it works
-cava-irl (or "cirl" for short) utilizes cava's raw/fifo output mode to send raw waveform data to your RPI. The RPI uses this data to change the brightness of the LEDs accordingly. 
+*cava-irl* (or *cirl* for short) utilizes cava's raw/fifo output mode to send raw waveform data to your RPI. The RPI uses this data to change the brightness of the LEDs accordingly. 
 
 ### Features
 During execution, cirl allows users to...
