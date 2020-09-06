@@ -9,6 +9,7 @@ During execution, cirl allows users to...
 * change the color of the LEDs,
 * switch between different formulas used to calculate brightness,
 * and change the visibility of contrast between low and high points in an audio
+
 Most importantly, since cirl sends data over a network to the RPI, you can __control the LEDs via the internet__ so long as the RPI is running cirlservice.
 
 ## Installation
