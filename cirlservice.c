@@ -34,7 +34,7 @@ char *cavaloop(int cava_sock) {
 
     // read data from socket
     while (1) {
-        if (recvall(cava_sock, temp, BUFFER_SIZE, 0) != 0) {
+        if (recvall(cava_sock, temp, CMD_SIZE, 0) != 0) {
             free(temp);
             return "Client disconnected";
         }

@@ -1,6 +1,8 @@
 #include "cirlcommon.h"
 #include "led.h"
 
+#define max(a,b) (a > b) ? a : b
+
 // see github page for difference between these two functions
 int cirlsigmoid(int x) {
     return floor(1000 / (1 + exp(-0.013 * (x - 500))));
@@ -11,7 +13,7 @@ int cirlexp(int peak, int amp) {
 }
 
 // TODO: maximize color value if option is set (ex. RGB{70, 70, 70} becomes RGB{255, 255, 255} automatically})
-int color(char *colorstr, char *rgb) {
+int color(char *colorstr, unsigned char *rgb) {
     char *r = NULL, delim[] = " ", *temp = strtok_r(colorstr, delim, &r);
     int temp_rgb[3], i;
 
@@ -56,13 +58,13 @@ float amp(char *ampstr, float amplifier) {
     return temp_amplifier;
 }
 
-int setsigmoid(char *sigstr, char use_sig) {
+char setsigmoid(char *sigstr, char use_sig) {
     char *r = NULL, delim[] = " ", *temp = strtok_r(sigstr, " ", &r);
     int temp_use_sig;
 
     temp = strtok_r(NULL, delim, &r);
     if (temp != NULL) {
-        temp_use_sig = atoi(temp[0]);
+        temp_use_sig = atoi(temp);
         if (temp_use_sig != 0 && temp_use_sig != 1) {
             printf("Value should be 0 or 1\n");
             return use_sig;
@@ -78,7 +80,7 @@ int setsigmoid(char *sigstr, char use_sig) {
 
 int processline(char *line, float amplifier, char use_sig) {
     char *r = NULL, delim[] = " ", *temp = calloc(8, sizeof(char));
-    int peak = 0, temp_int;
+    int peak = 0, temp_int, brightness;
 
     if (line != NULL) {
         // get next line and feed into temp
@@ -88,11 +90,10 @@ int processline(char *line, float amplifier, char use_sig) {
         while (temp != NULL) {
             temp_int = atoi(temp);
             peak = max(peak, temp_int);
-            temp = strtok(NULL, delim);
+            temp = strtok_r(NULL, delim, &r);
         }
 
         // line holds the last token for some reason
-        peak = max(peak, atoi(line));
 
         free(temp);
         return (use_sig) ? cirlsigmoid(peak) : cirlexp(peak, amplifier);
@@ -101,8 +102,9 @@ int processline(char *line, float amplifier, char use_sig) {
     return 0;
 }
 
-void getcmd(char *line, char *rgb, float amplifier, char use_sig, char *cmd) {
-    int peak, r, g, b;
+void getcmd(char *line, unsigned char *rgb, float amplifier, char use_sig, char *cmd) {
+    int peak;
+    unsigned char r, g, b;
 
     peak = floor(processline(line, amplifier, use_sig) * 0.255);
     r = floor(rgb[0] * ((double)peak / 255));

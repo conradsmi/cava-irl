@@ -20,7 +20,7 @@ void *menuloop(void *arg);
 void *fifoloop(void *arg);
 
 // led variables
-char RGB[] = {35, 175, 133}; // rgb color
+unsigned char *RGB; // rgb color
 float AMP = 2.0; // see github page for this
 char USE_SIG = 0; // sigmoid mode on/off
 // general variables
@@ -167,8 +167,6 @@ void *fifoloop(void *arg) {
     int sockfd;
     FILE *fifo;
 
-    int peak, r, g, b;
-
     // clear fifo from previous cava sessions
     remove(fifo_name);
     mkfifo(fifo_name, 0777);
@@ -287,6 +285,10 @@ int main(int argc, char *argv[]) {
     // parent: menu + fifo
     else {
         printf("Initializing processes...\n");
+        RGB = calloc(3, sizeof(char));
+        RGB[0] = 51;
+        RGB[1] = 255;
+        RGB[2] = 194;
 
         // locking so we can fully/safely initialize tids
         pthread_mutex_lock(&mutex);
@@ -302,6 +304,7 @@ int main(int argc, char *argv[]) {
             if (pthread_status[i] != 0) {
                 fprintf(stderr, "Could not create threads: %s\n", strerror(pthread_status[i]));
                 pthread_cancel_all(tids, -1, THREAD_COUNT, &mutex);
+                free(RGB);
                 cirlkill(pid, EXIT_FAILURE);
             }
         }
@@ -314,6 +317,7 @@ int main(int argc, char *argv[]) {
             if (cancel_flag) {
                 printf("Exiting: %s\n", exitmsg);
                 pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &mutex);
+                free(RGB);
                 cirlkill(pid, EXIT_SUCCESS);
             }
         }

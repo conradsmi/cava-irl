@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <pthread.h>
+#include <math.h>
 
 #include <sys/stat.h>
 #include <sys/types.h>
