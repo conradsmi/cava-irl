@@ -2,6 +2,8 @@
 
 An audio visualizer for SMD5050 LEDs using Raspberry Pi (RPI).
 
+![cava-irl demo](https://media.giphy.com/media/fwKBlZJ2OquS31lcse/giphy.gif)
+
 ## How it works
 
 *cava-irl* (or *cirl* for short) utilizes [cava's](https://github.com/karlstav/cava) raw/fifo output mode to send raw waveform data to your RPI. The RPI uses this data to change the brightness of the LEDs accordingly.
