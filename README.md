@@ -2,7 +2,7 @@
 
 An audio visualizer for SMD5050 LEDs using Raspberry Pi (RPI).
 
-![cava-irl demo](https://media.giphy.com/media/fwKBlZJ2OquS31lcse/giphy.gif)
+![cava-irl demo](https://media.giphy.com/media/fwKBlZJ2OquS31lcse/giphy.gif "cava-irl")
 
 ## How it works
 
