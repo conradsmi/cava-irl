@@ -58,11 +58,6 @@ void pthread_cancel_all(pthread_t *tids, int exclude, int count, pthread_mutex_t
     pthread_mutex_unlock(&(*mutex));
 }
 
-void cirlexit(char *msg) {
-    printf("Exiting: %s\n", msg);
-    exit(EXIT_SUCCESS);
-}
-
 void cirlkill(int pid, int status) {
     kill(pid, SIGTERM);
     exit(status);
@@ -70,8 +65,4 @@ void cirlkill(int pid, int status) {
 
 void sigterm(int sig) {
     exit(EXIT_SUCCESS);
-}
-
-void printopterr(char *msg) {
-    fprintf(stderr, "Invalid option: %s\n", msg);
 }

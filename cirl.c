@@ -1,8 +1,11 @@
-#include "cirlcommon.h"
 #include <ctype.h>
 #include <sys/mman.h>
+#include "cirlcommon.h"
+#include "led.h"
 
 #define THREAD_COUNT 2
+
+#define max(a,b) (a > b) ? a : b
 
 // structs
 struct cirl_info {
@@ -16,21 +19,27 @@ void *menuloop(void *arg);
 
 void *fifoloop(void *arg);
 
-// global variables
+// led variables
+char RGB[] = {35, 175, 133}; // rgb color
+float AMP = 2.0; // see github page for this
+char USE_SIG = 0; // sigmoid mode on/off
+// general variables
+struct cirl_info cinfo;
+int cancel_flag = 0;
+char *menu_opt = NULL;
+// thread variables
 pthread_t tids[THREAD_COUNT];
 void *(*pthread_funcs[])(void *) = {menuloop, fifoloop};
-char *menu_opt = NULL;
-struct cirl_info *cinfo = NULL;
-int cancel_flag = 0;
-char *exitmsg = NULL;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
+// info for user
+char *exitmsg = NULL;
 char helpmsg[] = \
 "\ncava-irl commands: \n\
 ------------------ \n\
 Change color: \"c (num) (num) (num)\" (must be RGB value)\n\
 \n\
-Change constraster: \"a (num)\" (between 0 and 5)\n\
+Change constraster: \"a (num)\" (between 1.0000 and 5.0000)\n\
    - Makes higher peaks brighter, lower peaks dimmer\n\
 \n\
 Toggle sigmoid mode: \"s (0 or 1)\"\n\
@@ -38,8 +47,8 @@ Toggle sigmoid mode: \"s (0 or 1)\"\n\
 \n\
 Show this help message: \"h\"\n\
 \n\
-Exit cava-irl: \"q\"\n\
-   - NOTE: This does not exit cirlservice; you must turn it off manually within the pi\n\n";
+Exit cirl: \"q\"\n\
+   - NOTE: This does not exit cirlservice; you must turn it off manually within the pi by entering Ctrl+C\n\n";
 
 
 int getsock(char *ip, char *port) {
@@ -92,6 +101,7 @@ int getsock(char *ip, char *port) {
     return sock;
 }
 
+
 // handle in-execution menu
 void *menuloop(void *arg) {
     char *temp = calloc(MENUOPT_SIZE, sizeof(char));
@@ -101,65 +111,63 @@ void *menuloop(void *arg) {
     sleep(1);
     printf("Enter commands below:\n");
     while (1) {
-        if (menu_opt == NULL) {
-            // we use a temporary variable to wait for user input because we would lock up
-            // the fifoloop process otherwise
-            fputs("> ", stdout);
-            fflush(stdout);
-            fgets(temp, MENUOPT_SIZE, stdin);
+        // we use a temporary variable to wait for user input because we would lock up
+        // the fifoloop process otherwise
+        fputs("> ", stdout);
+        fflush(stdout);
+        fgets(temp, MENUOPT_SIZE, stdin);
+        fflush(stdin);
 
-            pthread_mutex_lock(&mutex);
-            menu_opt = temp;
-
-            // check for valid input then wait for fifoloop to reset it
-            switch(menu_opt[0]) {
-                case ' ':
-                case '\n':
-                case '\0':
-                    menu_opt = NULL;
-                case 'a':
-                case 'c':
-                case 's':
-                    // allows fifoloop to read
-                    break;
-                case 'h':
-                    printf("%s", helpmsg);
-                    menu_opt = NULL;
-                    break;
-                case 'q':
-                    // wait for fifoloop to read and exit
-                    free(menu_opt);
-                    // prepare return message
-                    exitmsg = "Option \'q\' was input";
-                    cancel_flag = 1;
-                    pthread_mutex_unlock(&mutex);
-                    pthread_exit(NULL);
-                    break;
-                default:
-                    printopterr("Invalid option code: " + menu_opt[0]);
-                    printf("%s", helpmsg);
-                    menu_opt = NULL;
-                    break;
-            }
-            pthread_mutex_unlock(&mutex);
+        pthread_mutex_lock(&mutex);
+        menu_opt = temp;
+        // check for valid input then wait for fifoloop to reset it
+        switch(menu_opt[0]) {
+            case ' ':
+            case '\n':
+            case '\0':
+                printf("Enter \'h\' for help\n");
+                break;
+            case 'a':
+                AMP = amp(menu_opt, AMP);
+                break;
+            case 'c':
+                color(menu_opt, RGB);
+                break;
+            case 's':
+                USE_SIG = setsigmoid(menu_opt, USE_SIG);
+                break;
+            case 'h':
+                printf("%s", helpmsg);
+                break;
+            case 'q':
+                free(menu_opt);
+                exitmsg = "Option \'q\' was input";
+                cancel_flag = 1;
+                pthread_mutex_unlock(&mutex);
+                pthread_exit(NULL);
+                break;
+            default:
+                printf("Invalid option code: %c\n", menu_opt[0]);
+                printf("%s", helpmsg);
+                break;
         }
-        else {
-            // wait 1ms for data to be processed; shouldn't happen too often
-            usleep(1000);
-        }
+        menu_opt = NULL;
+        pthread_mutex_unlock(&mutex);
     }
 }
 
 // handle fifo data
 void *fifoloop(void *arg) {
-    char *conf = cinfo->conf;
-    char *pi_ip = cinfo->pi_ip;
-    char *fifo_name = cinfo->fifo_name;
+    char *conf = cinfo.conf;
+    char *pi_ip = cinfo.pi_ip;
+    char *fifo_name = cinfo.fifo_name;
 
-    char *line;
+    char *line, *cmd;
     size_t readcode;
     int sockfd;
     FILE *fifo;
+
+    int peak, r, g, b;
 
     // clear fifo from previous cava sessions
     remove(fifo_name);
@@ -175,11 +183,9 @@ void *fifoloop(void *arg) {
         pthread_exit(NULL);
     }
 
-    line = calloc(BUFFER_SIZE, sizeof(char));
     // get socket on fifo data port
     if ((sockfd = getsock(pi_ip, PORT)) == -1) {
         fclose(fifo);
-        free(line);
         pthread_mutex_lock(&mutex);
         exitmsg = "Socket error";
         cancel_flag = 1;
@@ -187,20 +193,16 @@ void *fifoloop(void *arg) {
         pthread_exit(NULL);
     }
 
+    line = calloc(BUFFER_SIZE, sizeof(char));
+    cmd = calloc(CMD_SIZE, sizeof(char));
     // send fifo data
     while (1) {
         readcode = fread(line, sizeof(char), BUFFER_SIZE, fifo);
         // data can be sent
         if (readcode > 0) {
             pthread_mutex_lock(&mutex);
-            sendall(sockfd, line, BUFFER_SIZE, 0);
-            if (menu_opt != NULL) {
-                sendall(sockfd, menu_opt, MENUOPT_SIZE, 0);
-                menu_opt = NULL;
-            }
-            else {
-                sendall(sockfd, "n", MENUOPT_SIZE, 0);
-            }
+            getcmd(line, RGB, AMP, USE_SIG, cmd);
+            sendall(sockfd, cmd, CMD_SIZE, 0);
             pthread_mutex_unlock(&mutex);
         }
         // error occurred
@@ -209,6 +211,7 @@ void *fifoloop(void *arg) {
             fclose(fifo);
             close(sockfd);
             free(line);
+            free(cmd);
             pthread_mutex_lock(&mutex);
             exitmsg = "Fifo error";
             cancel_flag = 1;
@@ -217,8 +220,8 @@ void *fifoloop(void *arg) {
         }
         // EOF (shouldn't happen)
         else {
-            // wait a millisecond for more input
-            usleep(1000);
+            // wait 2.5ms for more input
+            usleep(2500);
         }
     }
 
@@ -226,38 +229,29 @@ void *fifoloop(void *arg) {
 
 
 int main(int argc, char *argv[]) {
-    // misc
     int option, i, pid;
     // thread info
     pthread_attr_t attr[THREAD_COUNT];
     int pthread_status[THREAD_COUNT];
 
-    // handle malloc
-    if ((cinfo = malloc(sizeof(struct cirl_info))) == NULL) {
-        perror("Malloc failure");
-        exit(EXIT_FAILURE);
-    }
-
     // handle pre-execution options
     while ((option = getopt(argc, argv, ":c:i:f:")) != -1) {
         switch (option) {
             case 'c':
-                cinfo->conf = optarg;
+                cinfo.conf = optarg;
                 break;
             case 'i':
-                cinfo->pi_ip = optarg;
+                cinfo.pi_ip = optarg;
                 break;
             case 'f':
-                cinfo->fifo_name = optarg;
+                cinfo.fifo_name = optarg;
                 break;
             case ':':
                 perror("Option needs a value");
-                free(cinfo);
                 exit(EXIT_FAILURE);
                 break;
             case '?':
                 fprintf(stderr, "Unknown option: %c\n", optopt);
-                free(cinfo);
                 exit(EXIT_FAILURE);
                 break;
         }
@@ -265,15 +259,14 @@ int main(int argc, char *argv[]) {
 
     // two processes: one for cava, one for handling menu commands and fifo data
     pid = fork();
-    // error
+    // fork error check
     if (pid == -1) {
         perror("Process creation error");
-        free(cinfo);
         exit(EXIT_FAILURE);
     }
     // child: cava
     else if (pid == 0) {
-        char *conf = cinfo->conf;
+        char *conf = cinfo.conf;
         char *arg = calloc(strlen(conf) + 4, sizeof(char));
 
         strcpy(arg, "-p ");
@@ -304,27 +297,24 @@ int main(int argc, char *argv[]) {
         }
         pthread_mutex_unlock(&mutex);
 
-        // handle thread creation failure
+        // thread creation error check
         for (i = 0; i < THREAD_COUNT; i++) {
             if (pthread_status[i] != 0) {
                 fprintf(stderr, "Could not create threads: %s\n", strerror(pthread_status[i]));
                 pthread_cancel_all(tids, -1, THREAD_COUNT, &mutex);
-                free(cinfo);
                 cirlkill(pid, EXIT_FAILURE);
             }
         }
 
         printf("Processes successfully initialized.\n");
 
+        // sleep until cancel flag is set
         while (1) {
-            for (i = 0; i < THREAD_COUNT; i++) {
-                usleep(1000);
-                if (cancel_flag) {
-                    printf("Exiting: %s\n", exitmsg);
-                    free(cinfo);
-                    pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &mutex);
-                    cirlkill(pid, EXIT_SUCCESS);
-                }
+            usleep(2500);
+            if (cancel_flag) {
+                printf("Exiting: %s\n", exitmsg);
+                pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &mutex);
+                cirlkill(pid, EXIT_SUCCESS);
             }
         }
     }

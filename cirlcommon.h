@@ -14,6 +14,7 @@
 #include <netdb.h>
 
 #define BUFFER_SIZE 2048
+#define CMD_SIZE 64
 #define RETMSG_SIZE 32
 #define MENUOPT_SIZE 16
 #define PORT "32816"
@@ -26,10 +27,6 @@ int recvall(int sock, const void *buffer, size_t len, int flags);
 
 void pthread_cancel_all(pthread_t *tids, int exclude, int count, pthread_mutex_t *mutex);
 
-void cirlexit(char *msg);
-
 void cirlkill(int pid, int status);
-
-void printopterr(char *msg);
 
 void sigterm(int sig);
