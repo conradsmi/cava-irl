@@ -108,3 +108,6 @@ Changes to any other fields not specified should probably be okay.
 cava does not offer true windows support, and thus, neither does cirl. However, theoretically, both programs should run quite nicely in WSL (Windows Subsystem for Linux). Unfortunately, it's apparently not that easy: __WSL does *not* come with built-in audio support.__ As you can imagine, audio support is pretty important for an audio visualizer.
 
 On the brighter side, there is supposedly a way to jerryrig PulseAudio so that it works in WSL, which cava can then use for its audio input. I am looking into how this can be accomplished, and if successful, I will post the full Windows installation tutorial here. In the meantime, you'll have to use some unix-based environment. (Honestly, it would probably be much easier to switch from Windows to Linux *entirely* than to get audio support enabled in WSL).
+
+## Known Issues
+* Sending cirlserv to the background (pressing Ctrl+Z) does not prevent cirl from sending data to the pi; when cirlserv comes back to the foreground, it rapidly processes all of this data even though any audio may have been long gone
