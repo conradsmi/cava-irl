@@ -81,6 +81,7 @@ int main(int argc, char *argv[]) {
         if (getpeername(new_sock, s->ai_addr, &(s->ai_addrlen)) == 0) {
             inet_ntop(s->ai_family, getaddr(s->ai_addr), name, INET6_ADDRSTRLEN);
             printf("Bound to client (%s); reading data and feeding it to GPIOs...\n", name);
+            perror("test");
         }
         else {
             perror("Could not resolve client name");
