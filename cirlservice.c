@@ -4,31 +4,6 @@
 
 #define THREAD_COUNT 2
 
-// handle in-execution menu
-// will be removed soon
-/*void menu(char *menu_opt) {
-    switch(menu_opt[0]) {
-        case 'a':
-            if(!amp(menu_opt)) {
-                printf("Changing amplifier... %.4lf\n", EXP);
-            }
-            break;
-        case 'c':
-            if(!color(menu_opt)) {
-                printf("Changing color... %d %d %d\n", RGB[0], RGB[1], RGB[2]);
-            }
-            break;
-        case 's':
-            if(!setsigmoid(menu_opt)) {
-                printf("Turning sigmoid mode... %s\n", USE_SIG ? "on" : "off");
-            }
-            break;
-        default:
-            // shouldn't happen
-            break;
-    }
-}*/
-
 char *cavaloop(int cava_sock) {
     char *temp = calloc(RETMSG_SIZE * 2, sizeof(char));
 
@@ -46,11 +21,10 @@ char *cavaloop(int cava_sock) {
     return "Execution ended abruptly";
 }
 
-
 int main(int argc, char *argv[]) {
     struct addrinfo hints, *res, *s;
     int errcode, sock, new_sock;
-    char name[INET6_ADDRSTRLEN];
+    char *name;
 
     int i;
     char *retmsg;
@@ -103,12 +77,14 @@ int main(int argc, char *argv[]) {
 
         // get name of client
         // TODO fix name
+        name = calloc(0, INET6_ADDRSTRLEN);
         if (getpeername(new_sock, s->ai_addr, &(s->ai_addrlen)) == 0) {
-            inet_ntop(s->ai_family, getaddr(s->ai_addr), name, sizeof(name));
+            inet_ntop(s->ai_family, getaddr(s->ai_addr), name, INET6_ADDRSTRLEN);
             printf("Bound to client (%s); reading data and feeding it to GPIOs...\n", name);
         }
         else {
             perror("Could not resolve client name");
+            free(name);
             exit(EXIT_FAILURE);
         }
 
@@ -117,6 +93,7 @@ int main(int argc, char *argv[]) {
         // turn LEDs off when client disconnects
         system("/usr/local/bin/pigs p 17 0 p 22 0 p 24 0");
 
+        free(name);
         close(new_sock);
     }
 
