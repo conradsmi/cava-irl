@@ -77,7 +77,6 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        printf("%d", s->ai_family);
         if (getpeername(new_sock, s->ai_addr, &(s->ai_addrlen)) == 0) {
             inet_ntop(s->ai_family, getaddr(s->ai_addr), name, INET_ADDRSTRLEN);
             printf("Bound to client (%s); reading data and feeding it to GPIOs...\n", name);
