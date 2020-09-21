@@ -24,8 +24,7 @@ char *cavaloop(int cava_sock) {
 int main(int argc, char *argv[]) {
     struct addrinfo hints, *res, *s;
     int errcode, sock, new_sock;
-    char *name;
-
+    char name[INET6_ADDRSTRLEN];
     int i;
     char *retmsg;
 
@@ -55,9 +54,9 @@ int main(int argc, char *argv[]) {
         close(sock);
     }
 
-    printf("%d\n", s->ai_family);
+    // although this line existed at this point in the manpage for getaddrinfo, freeing res
+    // frees s->ai_family as well, which caused it to become undefined; inet_ntop thus did not work
     //freeaddrinfo(res);
-    //printf("%d\n", s->ai_family);
 
     if (s == NULL) {
         perror("Could not bind");
@@ -65,6 +64,7 @@ int main(int argc, char *argv[]) {
     }
     if (listen(sock, 1) == -1) {
         perror("Could not listen for connections");
+        freeaddrinfo(res);
         exit(EXIT_FAILURE);
     }
 
@@ -77,18 +77,14 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-        // get name of client
-        // TODO fix name
-        name = calloc(0, INET_ADDRSTRLEN);
         printf("%d", s->ai_family);
         if (getpeername(new_sock, s->ai_addr, &(s->ai_addrlen)) == 0) {
             inet_ntop(s->ai_family, getaddr(s->ai_addr), name, INET_ADDRSTRLEN);
             printf("Bound to client (%s); reading data and feeding it to GPIOs...\n", name);
-            perror("test");
         }
         else {
             perror("Could not resolve client name");
-            free(name);
+            freeaddrinfo(res);
             exit(EXIT_FAILURE);
         }
 
@@ -97,9 +93,9 @@ int main(int argc, char *argv[]) {
         // turn LEDs off when client disconnects
         system("/usr/local/bin/pigs p 17 0 p 22 0 p 24 0");
 
-        free(name);
         close(new_sock);
     }
 
+    freeaddrinfo(res);
     return 0;
 }
