@@ -55,6 +55,7 @@ int main(int argc, char *argv[]) {
         close(sock);
     }
 
+    printf("%d\n", s->ai_family);
     freeaddrinfo(res);
 
     if (s == NULL) {
