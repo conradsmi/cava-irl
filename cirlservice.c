@@ -56,8 +56,8 @@ int main(int argc, char *argv[]) {
     }
 
     printf("%d\n", s->ai_family);
-    freeaddrinfo(res);
-    printf("%d\n", s->ai_family);
+    //freeaddrinfo(res);
+    //printf("%d\n", s->ai_family);
 
     if (s == NULL) {
         perror("Could not bind");
