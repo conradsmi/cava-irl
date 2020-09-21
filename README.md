@@ -2,7 +2,7 @@
 
 An audio visualizer for SMD5050 LEDs using Raspberry Pi (RPI).
 
-![cava-irl demo](https://media.giphy.com/media/fwKBlZJ2OquS31lcse/giphy.gif "cava-irl")
+![cava-irl demo](https://github.com/conradsmi/cava-irl/blob/master/cava-irl.gif "cava-irl demo")
 
 ## How it works
 
@@ -16,7 +16,7 @@ During execution, cirl allows users to...
 * switch between different formulas used to calculate brightness,
 * and change the visibility of contrast between low and high points in an audio.
 
-Most importantly, since cirl sends data over a network to the RPI, you can __control the LEDs via the internet__ so long as the RPI is running cirlservice.
+Most importantly, since cirl sends data over a network to the RPI, you can __control the LEDs via the internet__ so long as the RPI is running cirlserv.
 
 ## Installation
 
@@ -108,3 +108,6 @@ Changes to any other fields not specified should probably be okay.
 cava does not offer true windows support, and thus, neither does cirl. However, theoretically, both programs should run quite nicely in WSL (Windows Subsystem for Linux). Unfortunately, it's apparently not that easy: __WSL does *not* come with built-in audio support.__ As you can imagine, audio support is pretty important for an audio visualizer.
 
 On the brighter side, there is supposedly a way to jerryrig PulseAudio so that it works in WSL, which cava can then use for its audio input. I am looking into how this can be accomplished, and if successful, I will post the full Windows installation tutorial here. In the meantime, you'll have to use some unix-based environment. (Honestly, it would probably be much easier to switch from Windows to Linux *entirely* than to get audio support enabled in WSL).
+
+## Known Issues
+* Sending cirlserv to the background (pressing Ctrl+Z) does not prevent cirl from sending data to the pi; when cirlserv comes back to the foreground, it rapidly processes all of this data even though any audio may have been long gone
