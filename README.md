@@ -64,7 +64,7 @@ Example usage:
 
 ### cirlserv
 
-cirlserv is much simpler. Firstly, ensure that the pigpio daemon is running by using `sudo pigpiod`. Then, simply execute `cirlserv` on your RPI and it will handle connections automatically. Note that it will only handle one connection at a time. Once a client disconnects, another one can reconnect without any additional commands on the RPI; thus, you can make pigpiod and cirlserv run everytime you boot your RPI, allowing you to use cirl without having to ssh to the pi or otherwise using its terminal.
+cirlserv is much simpler. Firstly, ensure that the pigpio daemon is running by using `sudo pigpiod`. Then, simply execute `cirlserv` on your RPI and it will handle connections automatically. Note that it will only handle one connection at a time. Once a client disconnects, another one can reconnect without any additional commands on the RPI; ~~thus, you can make pigpiod and cirlserv run everytime you boot your RPI, allowing you to use cirl without having to ssh to the pi or otherwise using its terminal.~~ NOTE: cirlserv is not a true daemon yet, and will exit abruptly after some hours of execution. An update will daemonize cirlserv in the near-future.
 
 ### Notice on using the RPI for dual-purpose cirl
 
