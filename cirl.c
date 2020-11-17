@@ -50,6 +50,18 @@ Show this help message: \"h\"\n\
 Exit cirl: \"q\"\n\
    - NOTE: This does not exit cirlservice; you must turn it off manually within the pi by entering Ctrl+C\n\n";
 
+char init_helpmsg[] = \
+"\ncava-irl options: \n\
+----------------- \n\
+\n\
+-i (num), where (num) is the ip address of your RPI \n\
+-f (path/to/fifo), where (path/to/fifo) is the path to the fifo file \n\
+    that cava should output to. \n\
+-c (path/to/config), where (path/to/config) is the path to the config \n\
+    file that cava should use for raw/fifo mode. \n\
+-h, displays this message then terminates \n\
+\n";
+
 
 int getsock(char *ip, char *port) {
     struct addrinfo hints, *res, *s;
@@ -137,7 +149,7 @@ void *menuloop(void *arg) {
                 USE_SIG = setsigmoid(menu_opt, USE_SIG);
                 break;
             case 'h':
-                printf("%s", helpmsg);
+                printf("%s", init_helpmsg);
                 break;
             case 'q':
                 free(menu_opt);
@@ -233,7 +245,7 @@ int main(int argc, char *argv[]) {
     int pthread_status[THREAD_COUNT];
 
     // handle pre-execution options
-    while ((option = getopt(argc, argv, ":c:i:f:")) != -1) {
+    while ((option = getopt(argc, argv, ":c:i:f:h")) != -1) {
         switch (option) {
             case 'c':
                 cinfo.conf = optarg;
@@ -244,6 +256,9 @@ int main(int argc, char *argv[]) {
             case 'f':
                 cinfo.fifo_name = optarg;
                 break;
+            case 'h':
+                printf("%s", init_helpmsg);
+                exit(EXIT_SUCCESS);
             case ':':
                 perror("Option needs a value");
                 exit(EXIT_FAILURE);
@@ -282,6 +297,7 @@ int main(int argc, char *argv[]) {
             return -1;
         }
     }
+    
     // parent: menu + fifo
     else {
         printf("Initializing processes...\n");
