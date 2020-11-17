@@ -149,7 +149,7 @@ void *menuloop(void *arg) {
                 USE_SIG = setsigmoid(menu_opt, USE_SIG);
                 break;
             case 'h':
-                printf("%s", init_helpmsg);
+                printf("%s", helpmsg);
                 break;
             case 'q':
                 free(menu_opt);
