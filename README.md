@@ -54,13 +54,17 @@ Additionally, if cava's default config file is not the one you want to use for c
 
 * -c (path/to/config), where (path/to/config) is the path to the config file that cava should use for raw/fifo mode.
 
+Additional commands:
+
+* -h, displays a help message then terminates
+
 Example usage:
 
 `cirl -c ~/.config/cava/config_fifo -i 192.168.1.3 -f ~/Music/cava/cava_fifo`
 
 ### cirlserv
 
-cirlserv is much simpler. Firstly, ensure that the pigpio daemon is running by using `sudo pigpiod`. Then, simply execute `cirlserv` on your RPI and it will handle connections automatically. Note that it will only handle one connection at a time. Once a client disconnects, another one can reconnect without any additional commands on the RPI; thus, you can make pigpiod and cirlserv run everytime you boot your RPI, allowing you to use cirl without having to ssh to the pi or otherwise using its terminal.
+cirlserv is much simpler. Firstly, ensure that the pigpio daemon is running by using `sudo pigpiod`. Then, simply execute `cirlserv` on your RPI and it will handle connections automatically. Note that it will only handle one connection at a time. Once a client disconnects, another one can reconnect without any additional commands on the RPI; ~~thus, you can make pigpiod and cirlserv run everytime you boot your RPI, allowing you to use cirl without having to ssh to the pi or otherwise using its terminal.~~ NOTE: cirlserv is not a true daemon yet, and will exit abruptly after some hours of execution. An update will daemonize cirlserv in the near-future.
 
 ### Notice on using the RPI for dual-purpose cirl
 
