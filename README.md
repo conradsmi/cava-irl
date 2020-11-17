@@ -54,6 +54,10 @@ Additionally, if cava's default config file is not the one you want to use for c
 
 * -c (path/to/config), where (path/to/config) is the path to the config file that cava should use for raw/fifo mode.
 
+Additional commands:
+
+* -h, displays a help message then terminates
+
 Example usage:
 
 `cirl -c ~/.config/cava/config_fifo -i 192.168.1.3 -f ~/Music/cava/cava_fifo`
