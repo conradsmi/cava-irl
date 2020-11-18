@@ -43,10 +43,11 @@ int main(int argc, char *argv[]) {
         }
 
         chdir("/");
+        logfp = fopen("cirlserv.log", "w+");
+        printf("Opening logfp\n");
         close(STDIN_FILENO);
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
-        logfp = fopen("cirlserv.log", "w+");
 
         // don't block context switches
         sleep(1);
