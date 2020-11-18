@@ -1,4 +1,5 @@
 #include "cirlcommon.h"
+#include "syslog.h"
 #include <math.h>
 
 char *cavaloop(int cava_sock) {
@@ -11,6 +12,7 @@ char *cavaloop(int cava_sock) {
             return "Client disconnected";
         }
 
+        //syslog(LOG_DEBUG, "Command: %s", temp);
         system(temp);
     }
 
@@ -24,13 +26,12 @@ int main(int argc, char *argv[]) {
     char name[INET6_ADDRSTRLEN];
     int i;
     char *retmsg;
-    FILE *logfp;
 
     // daemonize
     int sid, pid = fork();
 
     if (pid == -1) {
-        fprintf(logfp, "Process creation error: %s\n", strerror(errno));
+        perror("Process creation error");
         exit(EXIT_FAILURE);
     }
     else if (pid == 0) {
@@ -38,20 +39,19 @@ int main(int argc, char *argv[]) {
 
         sid = setsid();
         if (sid < 0) {
-            fprintf(logfp, "Session creation error: %s\n", strerror(errno));
+            perror("Session creation error");
             exit(EXIT_FAILURE);
         }
 
-        chdir("/");
         close(STDIN_FILENO);
         close(STDOUT_FILENO);
         close(STDERR_FILENO);
-        logfp = fopen("cirlserv.log", "w+");
+        chdir("/");
+        openlog("cirlserv", LOG_NDELAY, LOG_USER);
 
         // don't block context switches
         sleep(1);
-        fprintf(logfp, "Logging info...\n");
-        fflush(logfp);
+        syslog(LOG_INFO, "Beginning cirlserv daemon...");
 
         signal(SIGTERM, sigterm);
 
@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
 
         // listen for any address
         if ((errcode = getaddrinfo(NULL, PORT, &hints, &res)) != 0) {
-            fprintf(logfp, "Error getting address info: %s\n", gai_strerror(errcode));
+            syslog(LOG_ERR, "Error getting address info: %s\n", gai_strerror(errcode));
             exit(EXIT_FAILURE);
         }
 
@@ -84,36 +84,36 @@ int main(int argc, char *argv[]) {
         //freeaddrinfo(res);
 
         if (s == NULL) {
-            fprintf(logfp, "Could not bind: %s\n", strerror(errno));
+            syslog(LOG_ERR, "Could not bind: %s", strerror(errno));
             exit(EXIT_FAILURE);
         }
         if (listen(sock, 1) == -1) {
-            fprintf(logfp, "Could not listen for connections: %s\n", strerror(errno));
+            syslog(LOG_ERR, "Could not listen for connections: %s", strerror(errno));
             freeaddrinfo(res);
             exit(EXIT_FAILURE);
         }
 
         while(1) {
-            fprintf(logfp, "Ready for new connections!\n");
+            syslog(LOG_INFO, "Ready for new connections!");
             new_sock = accept(sock, s->ai_addr, &(s->ai_addrlen));
 
             if (new_sock == -1) {
-                fprintf(logfp, "Could not accept connection: %s\n", strerror(errno));
+                syslog(LOG_ERR, "Could not accept connection: %s", strerror(errno));
                 continue;
             }
 
             if (getpeername(new_sock, s->ai_addr, &(s->ai_addrlen)) == 0) {
                 inet_ntop(s->ai_family, getaddr(s->ai_addr), name, INET_ADDRSTRLEN);
-                fprintf(logfp, "Bound to client (%s); reading data and feeding it to GPIOs...\n", name);
+                syslog(LOG_INFO, "Bound to client (%s); reading data and feeding it to GPIOs...", name);
             }
             else {
-                fprintf(logfp, "Could not resolve client name: %s\n", strerror(errno));
+                syslog(LOG_INFO, "Could not resolve client name: %s", strerror(errno));
                 freeaddrinfo(res);
                 exit(EXIT_FAILURE);
             }
 
             retmsg = cavaloop(new_sock);
-            fprintf(logfp, "Closing connection with %s: %s\n", name, retmsg);
+            syslog(LOG_INFO, "Closing connection with %s: %s", name, retmsg);
             // turn LEDs off when client disconnects
             system("/usr/local/bin/pigs p 17 0 p 22 0 p 24 0");
 
@@ -121,7 +121,8 @@ int main(int argc, char *argv[]) {
         }
 
         freeaddrinfo(res);
-        fclose(logfp);
+        syslog(LOG_INFO, "Exiting cirlserv...");
+        closelog();
     }
 
     exit(EXIT_SUCCESS);
