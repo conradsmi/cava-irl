@@ -12,6 +12,7 @@ char *cavaloop(int cava_sock) {
             return "Client disconnected";
         }
 
+        syslog(LOG_DEBUG, "Command: %s", temp);
         system(temp);
     }
 
