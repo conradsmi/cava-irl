@@ -289,7 +289,7 @@ int main(int argc, char *argv[]) {
 
         // NOTE: this is probably very bad, but closing stdin seems to be the only way to
         // allow user input in the menuloop
-        close(fileno(stdin));
+        close(STDIN_FILENO);
         if (execlp("cava", arg, NULL) == -1) {
             fprintf(stderr, "Could not find cava executable file. Is it installed and in the right place \
                             (/usr/local/bin/cava)?\n");
@@ -297,7 +297,7 @@ int main(int argc, char *argv[]) {
             return -1;
         }
     }
-    
+
     // parent: menu + fifo
     else {
         printf("Initializing processes...\n");
