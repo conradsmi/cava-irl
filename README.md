@@ -64,7 +64,7 @@ Example usage:
 
 ### cirlserv
 
-cirlserv is much simpler. Firstly, ensure that the pigpio daemon is running by using `sudo pigpiod`. Then, simply execute `cirlserv` on your RPI and it will handle connections automatically. Note that it will only handle one connection at a time. Once a client disconnects, another one can reconnect without any additional commands on the RPI; ~~thus, you can make pigpiod and cirlserv run everytime you boot your RPI, allowing you to use cirl without having to ssh to the pi or otherwise using its terminal.~~ NOTE: cirlserv is not a true daemon yet, and will exit abruptly after some hours of execution. An update will daemonize cirlserv in the near-future.
+cirlserv is much simpler. Firstly, ensure that the pigpio daemon is running by using `sudo pigpiod`. Then, simply execute `cirlserv` on your RPI and it will handle connections automatically. Note that it will only handle one connection at a time. Once a client disconnects, another one can reconnect without any additional commands on the RPI; thus, you can make pigpiod and cirlserv run everytime you boot your RPI, allowing you to use cirl without having to ssh to the pi or otherwise using its terminal. Real-time logging info can be found at /var/log/syslog.
 
 ### Notice on using the RPI for dual-purpose cirl
 
@@ -115,3 +115,4 @@ On the brighter side, there is supposedly a way to jerryrig PulseAudio so that i
 
 ## Known Issues
 * Sending cirlserv to the background (pressing Ctrl+Z) does not prevent cirl from sending data to the pi; when cirlserv comes back to the foreground, it rapidly processes all of this data even though any audio may have been long gone
+* cirlserv may end abruptly after some hours of execution - the recent daemonization update hopefully fixed this
