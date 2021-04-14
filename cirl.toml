@@ -1,0 +1,17 @@
+# REQUIRED FIELDS:
+    # server:ip
+    # server:port
+    # cava:config
+    # cava:fifo
+    # colors:solid
+
+[server]
+    ip = "10.0.0.169" # ip of raspberry pi
+    port = 32816 # port to connect through
+
+[cava]
+    config = "~/.config/cava/config" # path of cava config file
+    fifo = "/home/conradsmith22/Music/cava_out" # path of cava fifo file
+
+[colors]
+    solid = [ 255, 0, 0 ] # should be a valid RGB code

@@ -2,14 +2,17 @@
 #include <sys/mman.h>
 #include "cirlcommon.h"
 #include "led.h"
+#include "tomlc99/toml.h"
 
 #define THREAD_COUNT 2
+#define STR(x) #x // magic directive that prints out values of macros
+#define DEFAULT_CONFIG_PATH "~/.config/cirl/cirl.toml"
 
 #define max(a,b) (a > b) ? a : b
 
 // structs
 struct cirl_info {
-    char *conf; // configuration file name
+    char *cava_conf; // configuration file name
     char *pi_ip; // ip address of the raspberry pi
     char *fifo_name; // fifo file name
 };
@@ -57,6 +60,7 @@ char init_helpmsg[] = \
     file that cava should use for raw/fifo mode. \n\
 -h, displays this message then terminates \n\
 \n";
+
 
 
 int getsock(char *ip, char *port) {
@@ -166,7 +170,7 @@ void *menuloop(void *arg) {
 
 // handle fifo data
 void *fifoloop(void *arg) {
-    char *conf = cinfo.conf;
+    char *cava_conf = cinfo.cava_conf;
     char *pi_ip = cinfo.pi_ip;
     char *fifo_name = cinfo.fifo_name;
 
@@ -181,7 +185,7 @@ void *fifoloop(void *arg) {
     fifo = fopen(fifo_name, "r");
 
     if (fifo == NULL) {
-        fprintf(stderr, "cava fifo file could not be created or opened\n");
+        fprintf(stderr, "cava fifo file could not be created or opened - %s\n", strerror(errno));
         pthread_mutex_lock(&mutex);
         exitmsg = "Could not use fifo file";
         cancel_flag = 1;
@@ -236,21 +240,29 @@ void *fifoloop(void *arg) {
 
 int main(int argc, char *argv[]) {
     int option, i, pid;
+    char homedir[BUFFER_SIZE];
     // thread info
     pthread_attr_t attr[THREAD_COUNT];
     int pthread_status[THREAD_COUNT];
+    // cirl config info
+    char *toml_path;
+    FILE *toml_fp = NULL;
+    toml_table_t *cirl_toml;
+    toml_table_t *server_toml, *cava_toml, *colors_toml;
+    toml_datum_t ip_server_toml, port_server_toml, config_cava_toml, fifo_cava_toml, temp;
+    toml_array_t *solid_colors_toml;
+    char badval = 0;
+    char errbuf[256];
 
     // handle pre-execution options
-    while ((option = getopt(argc, argv, ":c:i:f:h")) != -1) {
+    while ((option = getopt(argc, argv, ":c:h")) != -1) {
         switch (option) {
             case 'c':
-                cinfo.conf = optarg;
-                break;
-            case 'i':
-                cinfo.pi_ip = optarg;
-                break;
-            case 'f':
-                cinfo.fifo_name = optarg;
+                toml_path = optarg;
+                if (!(toml_fp = fopen(toml_path, "r"))) {
+                    fprintf(stderr, "Cannot open \"%s\" toml file - %s", optarg, strerror(errno));
+                    exit(EXIT_FAILURE);
+                }
                 break;
             case 'h':
                 printf("%s", init_helpmsg);
@@ -266,6 +278,71 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    // read and parse toml file
+    // use default toml file if given one invalid or not provided
+    if (toml_fp == NULL) {
+        snprintf(homedir, BUFFER_SIZE, getenv("HOME"));
+        toml_path = strcat(homedir, DEFAULT_CONFIG_PATH);
+        if (!(toml_fp = fopen(toml_path, "r"))) {
+            printf("%s\n", toml_path);
+            fprintf(stderr, "Cannot use/find default toml file (is it %s ?) - %s\n", STR(DEFAULT_CONFIG_PATH), strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+        printf("cirl.toml file not provided or invalid, using default...\n");
+    }
+    cirl_toml = toml_parse_file(toml_fp, errbuf, sizeof(errbuf));
+    fclose(toml_fp);
+    if (!cirl_toml) {
+        fprintf(stderr, "Cannot parse toml file - %s\n", strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    // read toml tables
+    server_toml = toml_table_in(cirl_toml, "server");
+    if (!server_toml) {
+        fprintf(stderr, "Missing [server] table in toml file\n");
+        exit(EXIT_FAILURE);
+    }
+    cava_toml = toml_table_in(cirl_toml, "cava");
+    if (!cava_toml) {
+        fprintf(stderr, "Missing [cava] table in toml file\n");
+        exit(EXIT_FAILURE);
+    }
+    colors_toml = toml_table_in(cirl_toml, "colors");
+    if (!colors_toml) {
+        fprintf(stderr, "Missing [colors] table in toml file\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // server table
+    ip_server_toml = toml_string_in(server_toml, "ip");
+    if (!ip_server_toml.ok) {
+        fprintf(stderr, "Missing [ip] field in [server] table in toml file\n");
+        exit(EXIT_FAILURE);
+    }
+    else {
+        cinfo.pi_ip = ip_server_toml.u.s;
+    }
+    port_server_toml = toml_int_in(server_toml, "port");
+    #ifdef PORT
+    if (port_server_toml.ok) {
+        #undef PORT
+        #define PORT port_server_toml.u.i;
+    }
+    #endif
+    if (!port_server_toml.ok) {
+        printf("[port] field in [server] table in toml file missing, using default port %s\n", STR(PORT));
+    }
+
+    fifo_cava_toml = toml_string_in(cava_toml, "fifo");
+    if (!fifo_cava_toml.ok) {
+        fprintf(stderr, "Missing [fifo] field in [cava] table in toml file\n");
+        exit(EXIT_FAILURE);
+    }
+    else {
+        cinfo.fifo_name = fifo_cava_toml.u.s;
+    }
+
     // two processes: one for cava, one for handling menu commands and fifo data
     pid = fork();
     // fork error check
@@ -275,7 +352,17 @@ int main(int argc, char *argv[]) {
     }
     // child: cava
     else if (pid == 0) {
-        char *conf = cinfo.conf;
+        // cava table
+        config_cava_toml = toml_string_in(cava_toml, "config");
+        if (!config_cava_toml.ok) {
+            fprintf(stderr, "Missing [config] field in [cava] table in toml file\n");
+            cirlkill(pid, EXIT_FAILURE);
+        }
+        else {
+            cinfo.cava_conf = config_cava_toml.u.s;
+        }
+
+        char *conf = cinfo.cava_conf;
         char *arg = calloc(strlen(conf) + 4, sizeof(char));
 
         strcpy(arg, "-p ");
@@ -297,10 +384,6 @@ int main(int argc, char *argv[]) {
     // parent: menu + fifo
     else {
         printf("Initializing processes...\n");
-        RGB = calloc(3, sizeof(char));
-        RGB[0] = 51;
-        RGB[1] = 255;
-        RGB[2] = 194;
 
         // locking so we can fully/safely initialize tids
         pthread_mutex_lock(&mutex);
@@ -316,12 +399,33 @@ int main(int argc, char *argv[]) {
             if (pthread_status[i] != 0) {
                 fprintf(stderr, "Could not create threads: %s\n", strerror(pthread_status[i]));
                 pthread_cancel_all(tids, -1, THREAD_COUNT, &mutex);
-                free(RGB);
                 cirlkill(pid, EXIT_FAILURE);
             }
         }
 
         printf("Processes successfully initialized.\n");
+
+        // colors table
+        solid_colors_toml = toml_array_in(colors_toml, "solid");
+        RGB = calloc(3, sizeof(char));
+        if (solid_colors_toml) {
+            for (int i = 0; i < 3; i++) {
+                temp = toml_int_at(solid_colors_toml, i);
+                if (!temp.ok) {
+                    // TODO verify that errno is set appropriately
+                    fprintf(stderr, "Bad value in [solid] field in [colors] table in toml file - %s\n", strerror(errno));
+                    badval = 1;
+                    break;
+                }
+                RGB[i] = temp.u.i;
+            }
+        }
+        if (!solid_colors_toml || badval) {
+            RGB[0] = 51;
+            RGB[1] = 255;
+            RGB[2] = 194;
+            printf("[solid] field in [colors] table in toml file missing/invalid, using default values %d %d %d\n", RGB[0], RGB[1], RGB[2]);
+        }
 
         // sleep until cancel flag is set
         while (1) {
