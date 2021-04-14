@@ -6,7 +6,7 @@
 
 #define THREAD_COUNT 2
 #define STR(x) #x // magic directive that prints out values of macros
-#define DEFAULT_CONFIG_PATH "~/.config/cirl/cirl.toml"
+#define DEFAULT_CONFIG_PATH "/.config/cirl/cirl.toml"
 
 #define max(a,b) (a > b) ? a : b
 
