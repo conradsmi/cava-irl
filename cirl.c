@@ -6,6 +6,7 @@
 
 #define THREAD_COUNT 2
 #define STR(x) #x // magic directive that prints out values of macros
+#define DEFAULT_CONFIG_PATH "~/.config/cirl/cirl.toml"
 
 #define max(a,b) (a > b) ? a : b
 
@@ -278,13 +279,13 @@ int main(int argc, char *argv[]) {
     }
 
     // read and parse toml file
-    // use default
+    // use default toml file if given one invalid or not provided
     if (toml_fp == NULL) {
         snprintf(homedir, BUFFER_SIZE, getenv("HOME"));
-        toml_path = strcat(homedir, "/.config/cirl/cirl.toml");
+        toml_path = strcat(homedir, DEFAULT_CONFIG_PATH);
         if (!(toml_fp = fopen(toml_path, "r"))) {
             printf("%s\n", toml_path);
-            fprintf(stderr, "Cannot use/find default toml file (is it ~/.config/cirl/cirl.toml ?) - %s\n", strerror(errno));
+            fprintf(stderr, "Cannot use/find default toml file (is it %s ?) - %s\n", STR(DEFAULT_CONFIG_PATH), strerror(errno));
             exit(EXIT_FAILURE);
         }
         printf("cirl.toml file not provided or invalid, using default...\n");
