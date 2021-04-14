@@ -37,7 +37,7 @@ __NOTE:__ This build is in an experimental state; expect some bugs and frequent 
     `cd cava-irl`\
     `make cirl` &nbsp; &nbsp; &nbsp; &nbsp; `#or "make cirlserv"`
 
-   Finally, execute the install script (which just moves the executable to /usr/local/bin).
+   Finally, execute the install script.
 
     `make install_cirl` &nbsp; &nbsp; &nbsp; &nbsp; `#or "make install_cirlserv"`
 
@@ -45,22 +45,14 @@ __NOTE:__ This build is in an experimental state; expect some bugs and frequent 
 
 ### cirl
 
-A configuration file will be made available in the near future. For now, cirl requires at *least* two arguments:
+cirl now supports configuration files using the TOML C99 standard. The default file (cirl.toml) provides information on possible configurations.
 
-* -i (num), where (num) is the ip address of your RPI, and
-* -f (path/to/fifo), where (path/to/fifo) is the path to the fifo file that cava should output to.
+Optional commands:
 
-Additionally, if cava's default config file is not the one you want to use for cirl, you also need to add:
-
-* -c (path/to/config), where (path/to/config) is the path to the config file that cava should use for raw/fifo mode.
-
-Additional commands:
-
+* -c (path/to/cirl/config), the path to the designated config file (will use the default config file located at ~/.config/cirl/cirl.toml)
 * -h, displays a help message then terminates
 
-Example usage:
-
-`cirl -c ~/.config/cava/config_fifo -i 192.168.1.3 -f ~/Music/cava/cava_fifo`
+After installing, the usage command is simply `cirl`.
 
 ### cirlserv
 
@@ -103,7 +95,7 @@ This repository includes an example cava configuration file tailored for cirl. Y
 
 Changes to these fields are untested and may lead to errors:
 
-* "ascii_max_range = 1000" - Note that any value lower than the default (1000) should be okay, but you will lose some precision in the resulting brightness and lower values do not affect performance
+* "ascii_max_range = 1000" - Note that any value lower than the default (1000) should be okay, but you will lose some precision in the resulting brightness and lower values do not affect performance anyway, so why bother?
 
 Changes to any other fields not specified should probably be okay.
 
@@ -115,4 +107,4 @@ On the brighter side, there is supposedly a way to jerryrig PulseAudio so that i
 
 ## Known Issues
 * Sending cirlserv to the background (pressing Ctrl+Z) does not prevent cirl from sending data to the pi; when cirlserv comes back to the foreground, it rapidly processes all of this data even though any audio may have been long gone
-* cirlserv may end abruptly after some hours of execution - the recent daemonization update hopefully fixed this
+* Minor memory leaks exist with new configuration file update
