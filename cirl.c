@@ -37,18 +37,14 @@ char *exitmsg = NULL;
 char helpmsg[] = \
 "\ncava-irl commands: \n\
 ------------------ \n\
-Change color: \"c (num) (num) (num)\" (must be RGB value)\n\
-\n\
-Change constraster: \"a (num)\" (between 1.0000 and 5.0000)\n\
-   - Makes higher peaks brighter, lower peaks dimmer\n\
-\n\
-Toggle sigmoid mode: \"s (0 or 1)\"\n\
-   - Changes the way brightness is calculated. See the github page for details\n\
-\n\
-Show this help message: \"h\"\n\
-\n\
-Exit cirl: \"q\"\n\
-   - NOTE: This does not exit cirlservice; you must turn it off manually within the pi by entering Ctrl+C\n\n";
+\"a (num)\" - set contraster (between 1.0000 and 5.0000)\n\
+   * makes higher peaks brighter, lower peaks dimmer\n\
+\"c (num) (num) (num)\" - set color (must be RGB value)\n\
+\"h\" - show this help message\n\
+\"s (0 or 1)\" - toggle sigmoid mode\n\
+   * changes the way brightness is calculated. See the github page for details\n\
+\"q\" - exit cirl\n\
+   * NOTE: This does not exit cirlservice; you must turn it off manually within the pi by entering Ctrl+C\n\n";
 
 char init_helpmsg[] = \
 "\ncava-irl options: \n\
