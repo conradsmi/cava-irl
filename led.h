@@ -12,4 +12,5 @@ char setsigmoid(char *sigstr, char use_sig);
 
 int processline(char *line, float amplifier, char use_sig);
 
-void getcmd(char *line, unsigned char *rgb, float amplifier, char use_sig, char *cmd);
+void getcmd(char *line, unsigned char *rgb, unsigned char **gradient, char GRADIENT,
+            int gradient_count, float amplifier, char use_sig, char *cmd);

@@ -26,7 +26,7 @@ void *fifoloop(void *arg);
 unsigned char *RGB, **gradient; // rgb colors
 float AMP = 2.0; // see github page for this
 char USE_SIG = 0, GRADIENT = 0; // sigmoid mode on/off, gradient on/off
-int gradient_count;
+int gradient_count = 0;
 
 // general variables
 struct cirl_info cinfo;
@@ -214,7 +214,7 @@ void *fifoloop(void *arg) {
         // data can be sent
         if (readcode > 0) {
             pthread_mutex_lock(&mutex);
-            getcmd(line, RGB, AMP, USE_SIG, cmd);
+            getcmd(line, RGB, gradient, GRADIENT, gradient_count, AMP, USE_SIG, cmd);
             sendall(sockfd, cmd, CMD_SIZE, 0);
             pthread_mutex_unlock(&mutex);
         }
@@ -253,7 +253,7 @@ int main(int argc, char *argv[]) {
     toml_table_t *cirl_toml;
     toml_table_t *server_toml, *cava_toml, *colors_toml;
     toml_datum_t ip_server_toml, port_server_toml, config_cava_toml, fifo_cava_toml, gradient_colors_toml, temp;
-    toml_array_t *solid_colors_toml;
+    toml_array_t *solid_colors_toml, *gradientid_colors_toml;
     char badval = 0;
     char errbuf[256];
 
@@ -284,7 +284,7 @@ int main(int argc, char *argv[]) {
     // read and parse toml file
     // use default toml file if given one invalid or not provided
     if (toml_fp == NULL) {
-        snprintf(homedir, BUFFER_SIZE, getenv("HOME"));
+        snprintf(homedir, BUFFER_SIZE, "%s", getenv("HOME"));
         toml_path = strcat(homedir, DEFAULT_CONFIG_PATH);
         if (!(toml_fp = fopen(toml_path, "r"))) {
             printf("%s\n", toml_path);
@@ -439,24 +439,23 @@ int main(int argc, char *argv[]) {
             cirlkill(pid, EXIT_FAILURE);
         }
         else {
-            gradient_count = gradient_colors_toml.u.b;
+            GRADIENT = gradient_colors_toml.u.b;
         }
 
         printf("Loading gradient values...\n");
         gradient = calloc(MAX_GRADIENT_COUNT, sizeof(unsigned char *));
-        for (int i = 0; i < MAX_GRADIENT_COUNT || !badval; i++) {
-            snprintf(temp_str, MAX_GRADIENT_COUNT_SLEN, "%d", i);
-            snprintf(gradient_id, MAX_GRADIENT_COUNT_IDLEN, "%s", strcat("gradient", temp_str));
+        for (int i = 0; i < MAX_GRADIENT_COUNT && !badval; i++) {
+            snprintf(gradient_id, MAX_GRADIENT_COUNT_IDLEN, "%s%d", "gradient", i+1);
 
-            temp = toml_string_in(colors_toml, gradient_id);
-            if (!temp.ok) {
+            gradientid_colors_toml = toml_array_in(colors_toml, gradient_id);
+            if (!gradientid_colors_toml) {
                 badval = 1;
             }
             else {
                 gradient[i] = calloc(3, sizeof(unsigned char));
                 gradient_count++;
                 for (int j = 0; j < 3; j++) {
-                    temp = toml_int_at(solid_colors_toml, i);
+                    temp = toml_int_at(gradientid_colors_toml, j);
                     if (!temp.ok || temp.u.i > 255 || temp.u.i < 0) {
                         // TODO verify that errno is set appropriately
                         fprintf(stderr, "Bad value in [%s] field in [colors] table in toml file - %s\n", gradient_id, strerror(errno));
