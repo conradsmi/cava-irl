@@ -117,19 +117,19 @@ void getcmd(char *line, unsigned char *rgb, unsigned char **gradient, char GRADI
         g1 -= g1 == gradient_count - 1;
         g2 = g1 + 1;
         step_adj_peak = peak_raw - (g1*step);
-        printf("%d %d ", g1, g2);
+        //printf("%d %d ", g1, g2);
         /*r = min(floor((((MAX_GRADIENT_COUNT - peak_raw) - (step * g1)) / (MAX_GRADIENT_COUNT - step * g2 * 1.0)) * gradient[g1][0] +q
                   ((peak_raw - (step * g1)) / (step * g2 * 1.0)) * gradient[g2][0]), 255);*/
         r = min(((step - step_adj_peak) / (double)step) * gradient[g1][0] + (step_adj_peak / (double)step) * gradient[g2][0], 255);
-        printf("%d ", r);
+        //printf("%d ", r);
         /*g = min(floor((((MAX_GRADIENT_COUNT - peak_raw) - (step * g1)) / (step * g2 * 1.0)) * gradient[g1][1] +
                   ((peak_raw - (step * g1)) / (step * g2 * 1.0)) * gradient[g2][1]), 255);*/
         g = min(((step - step_adj_peak) / (double)step) * gradient[g1][1] + (step_adj_peak / (double)step) * gradient[g2][1], 255);
-        printf("%d ", g);
+        //printf("%d ", g);
         /*b = min(floor((((MAX_GRADIENT_COUNT - peak_raw) - (step * g1)) / (step * g2 * 1.0)) * gradient[g1][2] +
                   ((peak_raw - (step * g1)) / (step * g2 * 1.0)) * gradient[g2][2]), 255);*/
         b = min(((step - step_adj_peak) / (double)step) * gradient[g1][2] + (step_adj_peak / (double)step) * gradient[g2][2], 255);
-        printf("%d\n", b);
+        //printf("%d\n", b);
     }
     else {
         r = floor(rgb[0] * ((double)peak / 255));
