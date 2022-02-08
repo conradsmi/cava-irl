@@ -9,8 +9,6 @@
 #define DEFAULT_CONFIG_PATH "/.config/cirl/cirl.toml"
 #define TABLE_ERR_STR(y) "Missing/invalid [" y "] table in toml file\n"
 #define FIELD_ERR_STR(x, y) "Missing/invalid [" x "] field in [" y "] table in toml file\n"
-#define DEBUG 0
-#define DEBUG_LPS 0
 
 #define max(a,b) (a > b) ? a : b
 
@@ -36,6 +34,8 @@ char USE_SIG = 0; // sigmoid mode on/off
 struct cirl_info cinfo;
 int cancel_flag = 0;
 char *menu_opt = NULL;
+char DEBUG = 0;
+int DEBUG_LPMS = 1000;
 // thread variables
 pthread_t tids[THREAD_COUNT];
 void *(*pthread_funcs[])(void *) = {menuloop, fifoloop};
@@ -59,11 +59,11 @@ char init_helpmsg[] = \
 "\ncava-irl options: \n\
 ----------------- \n\
 \n\
--c (path/to/config), where (path/to/config) is the path to the config \n\
-    file that cava should use for raw/fifo mode \n\
--d (num), enter debug mode and print out (num) lines per second; \n\
+-c (path/to/config), where (path/to/config) is the path to the config\n\
+    file that cava should use for raw/fifo mode\n\
+-d (num), enter debug mode and print out a line every (num) microseconds (try 1000 initially);\n\
     ignores IP in config file and outputs debug info into this terminal\n\
--h, displays this message then terminates \n\
+-h, displays this message then terminates\n\
 \n";
 
 
@@ -199,13 +199,15 @@ void *fifoloop(void *arg) {
     }
 
     // get socket on fifo data port
-    if ((sockfd = getsock(pi_ip, PORT)) == -1) {
-        fclose(fifo);
-        pthread_mutex_lock(&mutex);
-        exitmsg = "Socket error";
-        cancel_flag = 1;
-        pthread_mutex_unlock(&mutex);
-        pthread_exit(NULL);
+    if (!DEBUG) {
+        if ((sockfd = getsock(pi_ip, PORT)) == -1) {
+            fclose(fifo);
+            pthread_mutex_lock(&mutex);
+            exitmsg = "Socket error";
+            cancel_flag = 1;
+            pthread_mutex_unlock(&mutex);
+            pthread_exit(NULL);
+        }
     }
 
     line = calloc(BUFFER_SIZE, sizeof(char));
@@ -216,8 +218,16 @@ void *fifoloop(void *arg) {
         // data can be sent
         if (readcode > 0) {
             pthread_mutex_lock(&mutex);
-            getcmd(line, RGB, AMP, USE_SIG, cmd);
-            sendall(sockfd, cmd, CMD_SIZE, 0);
+            switch (DEBUG) {
+                case 0:
+                    getcmd(line, RGB, AMP, USE_SIG, cmd);
+                    sendall(sockfd, cmd, CMD_SIZE, 0);
+                case 1:
+                    unsigned char *rgb = getcolors(line, RGB, AMP, USE_SIG);
+                    printf("R: %d, G: %d, B: %d", rgb[0], rgb[1], rgb[2]);
+                    free(rgb);
+                    usleep(DEBUG_LPMS);
+            }
             pthread_mutex_unlock(&mutex);
         }
         // error occurred
@@ -242,7 +252,6 @@ void *fifoloop(void *arg) {
     }
 
 }
-
 
 int main(int argc, char *argv[]) {
     int option, i, pid;
@@ -271,14 +280,8 @@ int main(int argc, char *argv[]) {
                 }
                 break;
             case 'd':
-                #ifdef DEBUG
-                    #undef DEBUG
-                    #define DEBUG 1
-                #endif
-                #ifdef DEBUG_LPS
-                    #undef DEBUG_LPS
-                    #define DEBUG_LPS atoi(optarg)
-                #endif
+                DEBUG = 1;
+                DEBUG_LPMS = atoi(optarg);
             case 'h':
                 printf("%s", init_helpmsg);
                 exit(EXIT_SUCCESS);
@@ -317,10 +320,12 @@ int main(int argc, char *argv[]) {
     }
 
     // read toml tables
-    server_toml = toml_table_in(cirl_toml, "server");
-    if (!server_toml) {
-        fprintf(stderr, TABLE_ERR_STR("server"));
-        exit(EXIT_FAILURE);
+    if (!DEBUG) {
+        server_toml = toml_table_in(cirl_toml, "server");
+        if (!server_toml) {
+            fprintf(stderr, TABLE_ERR_STR("server"));
+            exit(EXIT_FAILURE);
+        }
     }
     cava_toml = toml_table_in(cirl_toml, "cava");
     if (!cava_toml) {
@@ -334,26 +339,26 @@ int main(int argc, char *argv[]) {
     }
 
     // server table
-    ip_server_toml = toml_string_in(server_toml, "ip");
-    if (!ip_server_toml.ok) {
-        fprintf(stderr, FIELD_ERR_STR("ip", "server"));
-        if (DEBUG) {
-            fprintf(stderr, "NOTE: [ip] should still be defined with debug mode on\n");
+    if (!DEBUG) {
+        ip_server_toml = toml_string_in(server_toml, "ip");
+        if (!ip_server_toml.ok) {
+            fprintf(stderr, FIELD_ERR_STR("ip", "server"));
+            exit(EXIT_FAILURE);
         }
-        exit(EXIT_FAILURE);
-    }
-    else {
-        cinfo.pi_ip = ip_server_toml.u.s;
-    }
-    port_server_toml = toml_int_in(server_toml, "port");
-    #ifdef PORT
-    if (port_server_toml.ok) {
-        #undef PORT
-        #define PORT port_server_toml.u.i;
-    }
-    #endif
-    if (!port_server_toml.ok) {
-        printf("%s, using default port %s\n", FIELD_ERR_STR("port", "server"), STR(PORT));
+        else {
+            cinfo.pi_ip = ip_server_toml.u.s;
+        }
+        port_server_toml = toml_int_in(server_toml, "port");
+        // TODO not correct?
+        #ifdef PORT
+        if (port_server_toml.ok) {
+            #undef PORT
+            #define PORT port_server_toml.u.i;
+        }
+        #endif
+        if (!port_server_toml.ok) {
+            printf("%s, using default port %s\n", FIELD_ERR_STR("port", "server"), STR(PORT));
+        }
     }
     fifo_cava_toml = toml_string_in(cava_toml, "fifo");
     if (!fifo_cava_toml.ok) {
@@ -401,7 +406,6 @@ int main(int argc, char *argv[]) {
             return -1;
         }
     }
-
     // parent: menu + fifo
     else {
         printf("Initializing processes...\n");
