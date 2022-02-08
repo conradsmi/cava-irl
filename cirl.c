@@ -178,6 +178,7 @@ void *fifoloop(void *arg) {
     char *cava_conf = cinfo.cava_conf;
     char *pi_ip = cinfo.pi_ip;
     char *fifo_name = cinfo.fifo_name;
+    unsigned char *rgb; // only for debug
 
     char *line, *cmd;
     size_t readcode;
@@ -223,7 +224,7 @@ void *fifoloop(void *arg) {
                     getcmd(line, RGB, AMP, USE_SIG, cmd);
                     sendall(sockfd, cmd, CMD_SIZE, 0);
                 case 1:
-                    unsigned char *rgb = getcolors(line, RGB, AMP, USE_SIG);
+                    rgb = getcolors(line, RGB, AMP, USE_SIG);
                     printf("R: %d, G: %d, B: %d", rgb[0], rgb[1], rgb[2]);
                     free(rgb);
                     usleep(DEBUG_LPMS);
@@ -450,7 +451,7 @@ int main(int argc, char *argv[]) {
             RGB[0] = 51;
             RGB[1] = 255;
             RGB[2] = 194;
-            printf("%s, using default values %d %d %d\n", FIELD_STR_ERR("solid", "colors"), RGB[0], RGB[1], RGB[2]);
+            printf("%s, using default values %d %d %d\n", FIELD_ERR_STR("solid", "colors"), RGB[0], RGB[1], RGB[2]);
         }
 
         // sleep until cancel flag is set
