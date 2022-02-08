@@ -18,6 +18,8 @@ struct cirl_info {
 };
 
 // headers
+int getsock(char *ip, char *port);
+
 void *menuloop(void *arg);
 
 void *fifoloop(void *arg);
@@ -55,9 +57,11 @@ char init_helpmsg[] = \
 \n\
 -i (num), where (num) is the ip address of your RPI \n\
 -f (path/to/fifo), where (path/to/fifo) is the path to the fifo file \n\
-    that cava should output to. \n\
+    that cava should output to \n\
 -c (path/to/config), where (path/to/config) is the path to the config \n\
-    file that cava should use for raw/fifo mode. \n\
+    file that cava should use for raw/fifo mode \n\
+-d (num), enter debug mode and print out (num) lines per second; \n\
+    ignores \'-i\' and outputs debug info into this terminal\n\
 -h, displays this message then terminates \n\
 \n";
 
