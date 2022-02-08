@@ -32,6 +32,7 @@ char USE_SIG = 0; // sigmoid mode on/off
 struct cirl_info cinfo;
 int cancel_flag = 0;
 char *menu_opt = NULL;
+char DEBUG = 0;
 // thread variables
 pthread_t tids[THREAD_COUNT];
 void *(*pthread_funcs[])(void *) = {menuloop, fifoloop};
@@ -55,9 +56,6 @@ char init_helpmsg[] = \
 "\ncava-irl options: \n\
 ----------------- \n\
 \n\
--i (num), where (num) is the ip address of your RPI \n\
--f (path/to/fifo), where (path/to/fifo) is the path to the fifo file \n\
-    that cava should output to \n\
 -c (path/to/config), where (path/to/config) is the path to the config \n\
     file that cava should use for raw/fifo mode \n\
 -d (num), enter debug mode and print out (num) lines per second; \n\
@@ -67,6 +65,7 @@ char init_helpmsg[] = \
 
 
 
+// secure a connection to ip
 int getsock(char *ip, char *port) {
     struct addrinfo hints, *res, *s;
     int errcode, sock, bytes_sent, len;
@@ -116,7 +115,6 @@ int getsock(char *ip, char *port) {
 
     return sock;
 }
-
 
 // handle in-execution menu
 void *menuloop(void *arg) {
