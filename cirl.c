@@ -7,6 +7,8 @@
 #define THREAD_COUNT 2
 #define STR(x) #x // magic directive that prints out values of macros
 #define DEFAULT_CONFIG_PATH "/.config/cirl/cirl.toml"
+#define DEBUG 0
+#define DEBUG_LPS 0
 
 #define max(a,b) (a > b) ? a : b
 
@@ -32,7 +34,6 @@ char USE_SIG = 0; // sigmoid mode on/off
 struct cirl_info cinfo;
 int cancel_flag = 0;
 char *menu_opt = NULL;
-char DEBUG = 0;
 // thread variables
 pthread_t tids[THREAD_COUNT];
 void *(*pthread_funcs[])(void *) = {menuloop, fifoloop};
@@ -59,7 +60,7 @@ char init_helpmsg[] = \
 -c (path/to/config), where (path/to/config) is the path to the config \n\
     file that cava should use for raw/fifo mode \n\
 -d (num), enter debug mode and print out (num) lines per second; \n\
-    ignores \'-i\' and outputs debug info into this terminal\n\
+    ignores IP in config file and outputs debug info into this terminal\n\
 -h, displays this message then terminates \n\
 \n";
 
@@ -233,6 +234,7 @@ void *fifoloop(void *arg) {
         // EOF (shouldn't happen)
         else {
             // wait 2.5ms for more input
+            // TODO change this lol
             usleep(2500);
         }
     }
@@ -257,7 +259,7 @@ int main(int argc, char *argv[]) {
     char errbuf[256];
 
     // handle pre-execution options
-    while ((option = getopt(argc, argv, ":c:h")) != -1) {
+    while ((option = getopt(argc, argv, ":c:h:d")) != -1) {
         switch (option) {
             case 'c':
                 toml_path = optarg;
@@ -266,6 +268,15 @@ int main(int argc, char *argv[]) {
                     exit(EXIT_FAILURE);
                 }
                 break;
+            case 'd':
+                #ifdef DEBUG
+                    #undef DEBUG
+                    #define DEBUG 1
+                #endif
+                #ifdef DEBUG_LPS
+                    #undef DEBUG_LPS
+                    #define DEBUG_LPS atoi(optarg)
+                #endif
             case 'h':
                 printf("%s", init_helpmsg);
                 exit(EXIT_SUCCESS);
