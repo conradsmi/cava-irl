@@ -7,6 +7,8 @@
 #define THREAD_COUNT 2
 #define STR(x) #x // magic directive that prints out values of macros
 #define DEFAULT_CONFIG_PATH "/.config/cirl/cirl.toml"
+#define TABLE_ERR_STR(y) "Missing/invalid [" y "] table in toml file\n"
+#define FIELD_ERR_STR(x, y) "Missing/invalid [" x "] field in [" y "] table in toml file\n"
 #define DEBUG 0
 #define DEBUG_LPS 0
 
@@ -291,6 +293,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    if (DEBUG) {
+        printf("Debug mode activated, output will be redirected to this terminal\n");
+    }
+
     // read and parse toml file
     // use default toml file if given one invalid or not provided
     if (toml_fp == NULL) {
@@ -313,24 +319,27 @@ int main(int argc, char *argv[]) {
     // read toml tables
     server_toml = toml_table_in(cirl_toml, "server");
     if (!server_toml) {
-        fprintf(stderr, "Missing [server] table in toml file\n");
+        fprintf(stderr, TABLE_ERR_STR("server"));
         exit(EXIT_FAILURE);
     }
     cava_toml = toml_table_in(cirl_toml, "cava");
     if (!cava_toml) {
-        fprintf(stderr, "Missing [cava] table in toml file\n");
+        fprintf(stderr, TABLE_ERR_STR("cava"));
         exit(EXIT_FAILURE);
     }
     colors_toml = toml_table_in(cirl_toml, "colors");
     if (!colors_toml) {
-        fprintf(stderr, "Missing [colors] table in toml file\n");
+        fprintf(stderr, TABLE_ERR_STR("colors"));
         exit(EXIT_FAILURE);
     }
 
     // server table
     ip_server_toml = toml_string_in(server_toml, "ip");
     if (!ip_server_toml.ok) {
-        fprintf(stderr, "Missing [ip] field in [server] table in toml file\n");
+        fprintf(stderr, FIELD_ERR_STR("ip", "server"));
+        if (DEBUG) {
+            fprintf(stderr, "NOTE: [ip] should still be defined with debug mode on\n");
+        }
         exit(EXIT_FAILURE);
     }
     else {
@@ -344,12 +353,11 @@ int main(int argc, char *argv[]) {
     }
     #endif
     if (!port_server_toml.ok) {
-        printf("[port] field in [server] table in toml file missing, using default port %s\n", STR(PORT));
+        printf("%s, using default port %s\n", FIELD_ERR_STR("port", "server"), STR(PORT));
     }
-
     fifo_cava_toml = toml_string_in(cava_toml, "fifo");
     if (!fifo_cava_toml.ok) {
-        fprintf(stderr, "Missing [fifo] field in [cava] table in toml file\n");
+        fprintf(stderr, FIELD_ERR_STR("fifo", "cava"));
         exit(EXIT_FAILURE);
     }
     else {
@@ -368,7 +376,7 @@ int main(int argc, char *argv[]) {
         // cava table
         config_cava_toml = toml_string_in(cava_toml, "config");
         if (!config_cava_toml.ok) {
-            fprintf(stderr, "Missing [config] field in [cava] table in toml file\n");
+            fprintf(stderr, FIELD_ERR_STR("config", "cava"));
             cirlkill(pid, EXIT_FAILURE);
         }
         else {
@@ -434,14 +442,16 @@ int main(int argc, char *argv[]) {
             }
         }
         if (!solid_colors_toml || badval) {
+            // TODO magic numbers
             RGB[0] = 51;
             RGB[1] = 255;
             RGB[2] = 194;
-            printf("[solid] field in [colors] table in toml file missing/invalid, using default values %d %d %d\n", RGB[0], RGB[1], RGB[2]);
+            printf("%s, using default values %d %d %d\n", FIELD_STR_ERR("solid", "colors"), RGB[0], RGB[1], RGB[2]);
         }
 
         // sleep until cancel flag is set
         while (1) {
+            // TODO another magic number
             usleep(2500);
             if (cancel_flag) {
                 printf("Exiting: %s\n", exitmsg);
