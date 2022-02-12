@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <sys/mman.h>
+#include <sys/time.h>
 #include "cirlcommon.h"
 #include "led.h"
 #include "tomlc99/toml.h"
@@ -33,7 +34,6 @@ char USE_SIG = 0; // sigmoid mode on/off
 // general variables
 struct cirl_info cinfo;
 int cancel_flag = 0;
-char *menu_opt = NULL;
 char DEBUG = 0;
 int DEBUG_LPMS = 1000;
 // thread variables
@@ -122,6 +122,7 @@ int getsock(char *ip, char *port) {
 // handle in-execution menu
 void *menuloop(void *arg) {
     char *temp = calloc(MENUOPT_SIZE, sizeof(char));
+    char *menu_opt = NULL;
     size_t size = MENUOPT_SIZE;
     int i;
 
@@ -179,6 +180,7 @@ void *fifoloop(void *arg) {
     char *pi_ip = cinfo.pi_ip;
     char *fifo_name = cinfo.fifo_name;
     unsigned char *rgb; // only for debug
+    struct timeval start, stop;
 
     char *line, *cmd;
     size_t readcode;
@@ -213,6 +215,7 @@ void *fifoloop(void *arg) {
 
     line = calloc(BUFFER_SIZE, sizeof(char));
     cmd = calloc(CMD_SIZE, sizeof(char));
+    gettimeofday(&start, NULL);
     // send fifo data
     while (1) {
         readcode = fread(line, sizeof(char), BUFFER_SIZE, fifo);
@@ -225,9 +228,16 @@ void *fifoloop(void *arg) {
                     sendall(sockfd, cmd, CMD_SIZE, 0);
                 case 1:
                     rgb = getcolors(line, RGB, AMP, USE_SIG);
-                    printf("R: %d, G: %d, B: %d", rgb[0], rgb[1], rgb[2]);
+                    gettimeofday(&stop, NULL);
+                    if (stop.tv_usec - start.tv_usec >= DEBUG_LPMS) {
+                        printf("%ld %ld\n", start.tv_usec, stop.tv_usec);
+                        printf("R: %d, G: %d, B: %d\n", rgb[0], rgb[1], rgb[2]);
+                        start = (struct timeval){0};
+                        gettimeofday(&start, NULL);
+                        stop = (struct timeval){0};
+                        gettimeofday(&stop, NULL);
+                    }
                     free(rgb);
-                    usleep(DEBUG_LPMS);
             }
             pthread_mutex_unlock(&mutex);
         }
@@ -248,6 +258,7 @@ void *fifoloop(void *arg) {
         else {
             // wait 2.5ms for more input
             // TODO change this lol
+            printf("we here\n");
             usleep(2500);
         }
     }
@@ -271,7 +282,7 @@ int main(int argc, char *argv[]) {
     char errbuf[256];
 
     // handle pre-execution options
-    while ((option = getopt(argc, argv, ":c:h:d")) != -1) {
+    while ((option = getopt(argc, argv, ":c:hd:")) != -1) {
         switch (option) {
             case 'c':
                 toml_path = optarg;
@@ -283,9 +294,11 @@ int main(int argc, char *argv[]) {
             case 'd':
                 DEBUG = 1;
                 DEBUG_LPMS = atoi(optarg);
+                break;
             case 'h':
                 printf("%s", init_helpmsg);
                 exit(EXIT_SUCCESS);
+                break;
             case ':':
                 perror("Option needs a value");
                 exit(EXIT_FAILURE);
@@ -394,12 +407,13 @@ int main(int argc, char *argv[]) {
 
         strcpy(arg, "-p ");
         strcat(arg, conf);
+        printf("%s\n", conf);
 
         signal(SIGTERM, sigterm);
 
         // NOTE: this is probably very bad, but closing stdin seems to be the only way to
         // allow user input in the menuloop
-        close(STDIN_FILENO);
+        // close(STDIN_FILENO);
         if (execlp("cava", arg, NULL) == -1) {
             fprintf(stderr, "Could not find cava executable file. Is it installed and in the right place \
                             (/usr/local/bin/cava)?\n");
