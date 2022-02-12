@@ -39,7 +39,7 @@ int DEBUG_LPMS = 1000;
 // thread variables
 pthread_t tids[THREAD_COUNT];
 void *(*pthread_funcs[])(void *) = {menuloop, fifoloop};
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t exitmsg_mutex = PTHREAD_MUTEX_INITIALIZER, pthread_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // info for user
 char *exitmsg = NULL;
@@ -132,11 +132,11 @@ void *menuloop(void *arg) {
         // we use a temporary variable to wait for user input because we would lock up
         // the fifoloop process otherwise
         fputs("> ", stdout);
-        fflush(stdout);
+        // fflush(stdout);
+        // TODO: swap w/ async function like poll()
         fgets(temp, MENUOPT_SIZE, stdin);
-        fflush(stdin);
+        // fflush(stdin);
 
-        pthread_mutex_lock(&mutex);
         menu_opt = temp;
         // check for valid input then wait for fifoloop to reset it
         switch(menu_opt[0]) {
@@ -159,9 +159,10 @@ void *menuloop(void *arg) {
                 break;
             case 'q':
                 free(menu_opt);
+                pthread_mutex_lock(&exitmsg_mutex);
                 exitmsg = "Option \'q\' was input";
                 cancel_flag = 1;
-                pthread_mutex_unlock(&mutex);
+                pthread_mutex_unlock(&exitmsg_mutex);
                 pthread_exit(NULL);
                 break;
             default:
@@ -170,7 +171,6 @@ void *menuloop(void *arg) {
                 break;
         }
         menu_opt = NULL;
-        pthread_mutex_unlock(&mutex);
     }
 }
 
@@ -194,10 +194,10 @@ void *fifoloop(void *arg) {
 
     if (fifo == NULL) {
         fprintf(stderr, "cava fifo file could not be created or opened - %s\n", strerror(errno));
-        pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(&exitmsg_mutex);
         exitmsg = "Could not use fifo file";
         cancel_flag = 1;
-        pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&exitmsg_mutex);
         pthread_exit(NULL);
     }
 
@@ -205,10 +205,10 @@ void *fifoloop(void *arg) {
     if (!DEBUG) {
         if ((sockfd = getsock(pi_ip, PORT)) == -1) {
             fclose(fifo);
-            pthread_mutex_lock(&mutex);
+            pthread_mutex_lock(&exitmsg_mutex);
             exitmsg = "Socket error";
             cancel_flag = 1;
-            pthread_mutex_unlock(&mutex);
+            pthread_mutex_unlock(&exitmsg_mutex);
             pthread_exit(NULL);
         }
     }
@@ -221,12 +221,13 @@ void *fifoloop(void *arg) {
         readcode = fread(line, sizeof(char), BUFFER_SIZE, fifo);
         // data can be sent
         if (readcode > 0) {
-            pthread_mutex_lock(&mutex);
             switch (DEBUG) {
                 case 0:
+                    // note: benign data race w/ menuloop
                     getcmd(line, RGB, AMP, USE_SIG, cmd);
                     sendall(sockfd, cmd, CMD_SIZE, 0);
                 case 1:
+                    // note: another benign data race w/ menuloop
                     rgb = getcolors(line, RGB, AMP, USE_SIG);
                     gettimeofday(&stop, NULL);
                     if (stop.tv_usec - start.tv_usec >= DEBUG_LPMS) {
@@ -239,7 +240,6 @@ void *fifoloop(void *arg) {
                     }
                     free(rgb);
             }
-            pthread_mutex_unlock(&mutex);
         }
         // error occurred
         else if (readcode < 0) {
@@ -248,10 +248,10 @@ void *fifoloop(void *arg) {
             close(sockfd);
             free(line);
             free(cmd);
-            pthread_mutex_lock(&mutex);
+            pthread_mutex_lock(&exitmsg_mutex);
             exitmsg = "Fifo error";
             cancel_flag = 1;
-            pthread_mutex_unlock(&mutex);
+            pthread_mutex_unlock(&exitmsg_mutex);
             pthread_exit(NULL);
         }
         // EOF (shouldn't happen)
@@ -413,7 +413,7 @@ int main(int argc, char *argv[]) {
 
         // NOTE: this is probably very bad, but closing stdin seems to be the only way to
         // allow user input in the menuloop
-        // close(STDIN_FILENO);
+        close(STDIN_FILENO);
         if (execlp("cava", arg, NULL) == -1) {
             fprintf(stderr, "Could not find cava executable file. Is it installed and in the right place \
                             (/usr/local/bin/cava)?\n");
@@ -426,19 +426,19 @@ int main(int argc, char *argv[]) {
         printf("Initializing processes...\n");
 
         // locking so we can fully/safely initialize tids
-        pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(&pthread_mutex);
         for (i = 0; i < THREAD_COUNT; i++) {
             pthread_attr_init(&attr[i]);
             pthread_status[i] = pthread_create(&tids[i], &attr[i], pthread_funcs[i], NULL);
             pthread_attr_destroy(&attr[i]);
         }
-        pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&pthread_mutex);
 
         // thread creation error check
         for (i = 0; i < THREAD_COUNT; i++) {
             if (pthread_status[i] != 0) {
                 fprintf(stderr, "Could not create threads: %s\n", strerror(pthread_status[i]));
-                pthread_cancel_all(tids, -1, THREAD_COUNT, &mutex);
+                pthread_cancel_all(tids, -1, THREAD_COUNT, &pthread_mutex);
                 cirlkill(pid, EXIT_FAILURE);
             }
         }
@@ -474,7 +474,7 @@ int main(int argc, char *argv[]) {
             usleep(2500);
             if (cancel_flag) {
                 printf("Exiting: %s\n", exitmsg);
-                pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &mutex);
+                pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &pthread_mutex);
                 free(RGB);
                 cirlkill(pid, EXIT_SUCCESS);
             }
