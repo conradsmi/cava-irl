@@ -414,7 +414,6 @@ int main(int argc, char *argv[]) {
 
         strcpy(arg, "-p ");
         strcat(arg, conf);
-        printf("%s\n", arg);
 
         signal(SIGTERM, sigterm);
 
