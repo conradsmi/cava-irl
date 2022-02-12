@@ -103,13 +103,13 @@ int processline(char *line, float amplifier, char use_sig) {
 }
 
 unsigned char *getcolors(char *line, unsigned char *rgb_raw, float amplifier, char use_sig) {
-    int peak;
+    double peak;
     unsigned char *rgb = calloc(3, sizeof(char));
 
     peak = floor(processline(line, amplifier, use_sig) * 0.255);
-    rgb[0] = floor(rgb[0] * ((double)peak / 255));
-    rgb[1] = floor(rgb[1] * ((double)peak / 255));
-    rgb[2] = floor(rgb[2] * ((double)peak / 255));
+    rgb[0] = floor(rgb_raw[0] * (peak / 255));
+    rgb[1] = floor(rgb_raw[1] * (peak / 255));
+    rgb[2] = floor(rgb_raw[2] * (peak / 255));
 
     return rgb;
 }

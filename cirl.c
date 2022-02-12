@@ -38,7 +38,7 @@ char DEBUG = 0;
 int DEBUG_LPMS = 1000;
 // thread variables
 pthread_t tids[THREAD_COUNT];
-void *(*pthread_funcs[])(void *) = {menuloop, fifoloop};
+void *(*pthread_funcs[])(void *) = {fifoloop, menuloop};
 pthread_mutex_t exitmsg_mutex = PTHREAD_MUTEX_INITIALIZER, pthread_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // info for user
@@ -126,51 +126,59 @@ void *menuloop(void *arg) {
     size_t size = MENUOPT_SIZE;
     int i;
 
-    sleep(1);
-    printf("Enter commands below:\n");
-    while (1) {
-        // we use a temporary variable to wait for user input because we would lock up
-        // the fifoloop process otherwise
-        fputs("> ", stdout);
-        // fflush(stdout);
-        // TODO: swap w/ async function like poll()
-        fgets(temp, MENUOPT_SIZE, stdin);
-        // fflush(stdin);
+    if (!DEBUG) {
+        sleep(1);
+        printf("Enter commands below:\n");
+        while (1) {
+            // we use a temporary variable to wait for user input because we would lock up
+            // the fifoloop process otherwise
+            fputs("> ", stdout);
+            // TODO: flushes might not be necessary
+            // fflush(stdout);
+            fgets(temp, MENUOPT_SIZE, stdin);
+            // fflush(stdin);
 
-        menu_opt = temp;
-        // check for valid input then wait for fifoloop to reset it
-        switch(menu_opt[0]) {
-            case ' ':
-            case '\n':
-            case '\0':
-                printf("Enter \'h\' for help\n");
-                break;
-            case 'a':
-                AMP = amp(menu_opt, AMP);
-                break;
-            case 'c':
-                color(menu_opt, RGB);
-                break;
-            case 's':
-                USE_SIG = setsigmoid(menu_opt, USE_SIG);
-                break;
-            case 'h':
-                printf("%s", helpmsg);
-                break;
-            case 'q':
-                free(menu_opt);
-                pthread_mutex_lock(&exitmsg_mutex);
-                exitmsg = "Option \'q\' was input";
-                cancel_flag = 1;
-                pthread_mutex_unlock(&exitmsg_mutex);
-                pthread_exit(NULL);
-                break;
-            default:
-                printf("Invalid option code: %c\n", menu_opt[0]);
-                printf("%s", helpmsg);
-                break;
+            menu_opt = temp;
+            // check for valid input then wait for fifoloop to reset it
+            switch(menu_opt[0]) {
+                case ' ':
+                case '\n':
+                case '\0':
+                    printf("Enter \'h\' for help\n");
+                    break;
+                case 'a':
+                    AMP = amp(menu_opt, AMP);
+                    break;
+                case 'c':
+                    color(menu_opt, RGB);
+                    break;
+                case 's':
+                    USE_SIG = setsigmoid(menu_opt, USE_SIG);
+                    break;
+                case 'h':
+                    printf("%s", helpmsg);
+                    break;
+                case 'q':
+                    free(menu_opt);
+                    pthread_mutex_lock(&exitmsg_mutex);
+                    exitmsg = "Option \'q\' was input";
+                    cancel_flag = 1;
+                    pthread_mutex_unlock(&exitmsg_mutex);
+                    pthread_exit(NULL);
+                    break;
+                default:
+                    printf("Invalid option code: %c\n", menu_opt[0]);
+                    printf("%s", helpmsg);
+                    break;
+            }
+            menu_opt = NULL;
         }
-        menu_opt = NULL;
+    }
+    else {
+        printf("NOTE: Debug mode on, menu unavailable\n");
+        while (1) {
+            sleep(1);
+        }
     }
 }
 
@@ -230,8 +238,7 @@ void *fifoloop(void *arg) {
                     // note: another benign data race w/ menuloop
                     rgb = getcolors(line, RGB, AMP, USE_SIG);
                     gettimeofday(&stop, NULL);
-                    if (stop.tv_usec - start.tv_usec >= DEBUG_LPMS) {
-                        printf("%ld %ld\n", start.tv_usec, stop.tv_usec);
+                    if ((stop.tv_sec * 1000000 + stop.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec) >= DEBUG_LPMS) {
                         printf("R: %d, G: %d, B: %d\n", rgb[0], rgb[1], rgb[2]);
                         start = (struct timeval){0};
                         gettimeofday(&start, NULL);
@@ -407,7 +414,7 @@ int main(int argc, char *argv[]) {
 
         strcpy(arg, "-p ");
         strcat(arg, conf);
-        printf("%s\n", conf);
+        printf("%s\n", arg);
 
         signal(SIGTERM, sigterm);
 
@@ -423,8 +430,6 @@ int main(int argc, char *argv[]) {
     }
     // parent: menu + fifo
     else {
-        printf("Initializing processes...\n");
-
         // locking so we can fully/safely initialize tids
         pthread_mutex_lock(&pthread_mutex);
         for (i = 0; i < THREAD_COUNT; i++) {
@@ -442,8 +447,6 @@ int main(int argc, char *argv[]) {
                 cirlkill(pid, EXIT_FAILURE);
             }
         }
-
-        printf("Processes successfully initialized.\n");
 
         // colors table
         solid_colors_toml = toml_array_in(colors_toml, "solid");
