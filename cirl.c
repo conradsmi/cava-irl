@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <sys/mman.h>
+#include <sys/time.h>
 #include "cirlcommon.h"
 #include "led.h"
 #include "tomlc99/toml.h"
@@ -7,6 +8,8 @@
 #define THREAD_COUNT 2
 #define STR(x) #x // magic directive that prints out values of macros
 #define DEFAULT_CONFIG_PATH "/.config/cirl/cirl.toml"
+#define TABLE_ERR_STR(y) "Missing/invalid [" y "] table in toml file\n"
+#define FIELD_ERR_STR(x, y) "Missing/invalid [" x "] field in [" y "] table in toml file\n"
 
 #define max(a,b) (a > b) ? a : b
 
@@ -18,6 +21,8 @@ struct cirl_info {
 };
 
 // headers
+int getsock(char *ip, char *port);
+
 void *menuloop(void *arg);
 
 void *fifoloop(void *arg);
@@ -31,11 +36,12 @@ int gradient_count = 0;
 // general variables
 struct cirl_info cinfo;
 int cancel_flag = 0;
-char *menu_opt = NULL;
+char DEBUG = 0;
+int DEBUG_LPMS = 1000;
 // thread variables
 pthread_t tids[THREAD_COUNT];
-void *(*pthread_funcs[])(void *) = {menuloop, fifoloop};
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+void *(*pthread_funcs[])(void *) = {fifoloop, menuloop};
+pthread_mutex_t exitmsg_mutex = PTHREAD_MUTEX_INITIALIZER, pthread_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // info for user
 char *exitmsg = NULL;
@@ -56,13 +62,16 @@ char init_helpmsg[] = \
 "\ncava-irl options: \n\
 ----------------- \n\
 \n\
--c (path/to/cirl/config), where (path/to/cirl/config) is the path to the TOML config \n\
-    file that cirl should use (uses ~/.config/cirl/cirl.toml by default) \n\
--h, displays this message then terminates \n\
+-c (path/to/config), where (path/to/config) is the path to the config\n\
+    file that cava should use for raw/fifo mode\n\
+-d (num), enter debug mode and print out a line every (num) microseconds (try 1000 initially);\n\
+    ignores IP in config file and outputs debug info into this terminal\n\
+-h, displays this message then terminates\n\
 \n";
 
 
 
+// secure a connection to ip
 int getsock(char *ip, char *port) {
     struct addrinfo hints, *res, *s;
     int errcode, sock, bytes_sent, len;
@@ -113,61 +122,69 @@ int getsock(char *ip, char *port) {
     return sock;
 }
 
-
 // handle in-execution menu
 void *menuloop(void *arg) {
     char *temp = calloc(MENUOPT_SIZE, sizeof(char));
+    char *menu_opt = NULL;
     size_t size = MENUOPT_SIZE;
     int i;
 
-    sleep(1);
-    printf("Enter commands below:\n");
-    while (1) {
-        // we use a temporary variable to wait for user input because we would lock up
-        // the fifoloop process otherwise
-        fputs("> ", stdout);
-        fflush(stdout);
-        fgets(temp, MENUOPT_SIZE, stdin);
-        fflush(stdin);
+    if (!DEBUG) {
+        sleep(1);
+        printf("Enter commands below:\n");
+        while (1) {
+            // we use a temporary variable to wait for user input because we would lock up
+            // the fifoloop process otherwise
+            fputs("> ", stdout);
+            // TODO: flushes might not be necessary
+            // fflush(stdout);
+            fgets(temp, MENUOPT_SIZE, stdin);
+            // fflush(stdin);
 
-        pthread_mutex_lock(&mutex);
-        menu_opt = temp;
-        // check for valid input then wait for fifoloop to reset it
-        switch(menu_opt[0]) {
-            case ' ':
-            case '\n':
-            case '\0':
-                printf("Enter \'h\' for help\n");
-                break;
-            case 'a':
-                AMP = amp(menu_opt, AMP);
-                break;
-            case 'c':
-                color(menu_opt, RGB);
-                break;
-            case 'g':
-                GRADIENT = !GRADIENT;
-                break;
-            case 's':
-                USE_SIG = setsigmoid(menu_opt, USE_SIG);
-                break;
-            case 'h':
-                printf("%s", helpmsg);
-                break;
-            case 'q':
-                free(menu_opt);
-                exitmsg = "Option \'q\' was input";
-                cancel_flag = 1;
-                pthread_mutex_unlock(&mutex);
-                pthread_exit(NULL);
-                break;
-            default:
-                printf("Invalid option code: %c\n", menu_opt[0]);
-                printf("%s", helpmsg);
-                break;
+            menu_opt = temp;
+            // check for valid input then wait for fifoloop to reset it
+            switch(menu_opt[0]) {
+                case ' ':
+                case '\n':
+                case '\0':
+                    printf("Enter \'h\' for help\n");
+                    break;
+                case 'a':
+                    AMP = amp(menu_opt, AMP);
+                    break;
+                case 'c':
+                    color(menu_opt, RGB);
+                    break;
+                case 'g':
+                    GRADIENT = !GRADIENT;
+                    break;
+                case 's':
+                    USE_SIG = setsigmoid(menu_opt, USE_SIG);
+                    break;
+                case 'h':
+                    printf("%s", helpmsg);
+                    break;
+                case 'q':
+                    free(menu_opt);
+                    pthread_mutex_lock(&exitmsg_mutex);
+                    exitmsg = "Option \'q\' was input";
+                    cancel_flag = 1;
+                    pthread_mutex_unlock(&exitmsg_mutex);
+                    pthread_exit(NULL);
+                    break;
+                default:
+                    printf("Invalid option code: %c\n", menu_opt[0]);
+                    printf("%s", helpmsg);
+                    break;
+            }
+            menu_opt = NULL;
         }
-        menu_opt = NULL;
-        pthread_mutex_unlock(&mutex);
+    }
+    else {
+        printf("NOTE: Debug mode on, menu unavailable\n");
+        while (1) {
+            sleep(1);
+        }
     }
 }
 
@@ -176,6 +193,8 @@ void *fifoloop(void *arg) {
     char *cava_conf = cinfo.cava_conf;
     char *pi_ip = cinfo.pi_ip;
     char *fifo_name = cinfo.fifo_name;
+    unsigned char *rgb; // only for debug
+    struct timeval start, stop;
 
     char *line, *cmd;
     size_t readcode;
@@ -189,34 +208,52 @@ void *fifoloop(void *arg) {
 
     if (fifo == NULL) {
         fprintf(stderr, "cava fifo file could not be created or opened - %s\n", strerror(errno));
-        pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(&exitmsg_mutex);
         exitmsg = "Could not use fifo file";
         cancel_flag = 1;
-        pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&exitmsg_mutex);
         pthread_exit(NULL);
     }
 
     // get socket on fifo data port
-    if ((sockfd = getsock(pi_ip, PORT)) == -1) {
-        fclose(fifo);
-        pthread_mutex_lock(&mutex);
-        exitmsg = "Socket error";
-        cancel_flag = 1;
-        pthread_mutex_unlock(&mutex);
-        pthread_exit(NULL);
+    if (!DEBUG) {
+        if ((sockfd = getsock(pi_ip, PORT)) == -1) {
+            fclose(fifo);
+            pthread_mutex_lock(&exitmsg_mutex);
+            exitmsg = "Socket error";
+            cancel_flag = 1;
+            pthread_mutex_unlock(&exitmsg_mutex);
+            pthread_exit(NULL);
+        }
     }
 
     line = calloc(BUFFER_SIZE, sizeof(char));
     cmd = calloc(CMD_SIZE, sizeof(char));
+    gettimeofday(&start, NULL);
     // send fifo data
     while (1) {
         readcode = fread(line, sizeof(char), BUFFER_SIZE, fifo);
         // data can be sent
         if (readcode > 0) {
-            pthread_mutex_lock(&mutex);
-            getcmd(line, RGB, gradient, GRADIENT, gradient_count, AMP, USE_SIG, cmd);
-            sendall(sockfd, cmd, CMD_SIZE, 0);
-            pthread_mutex_unlock(&mutex);
+            switch (DEBUG) {
+                case 0:
+                    // note: benign data race w/ menuloop
+                    getcmd(line, RGB, gradient, GRADIENT, gradient_count, AMP, USE_SIG, cmd);
+                    sendall(sockfd, cmd, CMD_SIZE, 0);
+                case 1:
+                    // note: another benign data race w/ menuloop
+                    // TODO: fix from gradient
+                    rgb = getcolors(line, RGB, AMP, USE_SIG);
+                    gettimeofday(&stop, NULL);
+                    if ((stop.tv_sec * 1000000 + stop.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec) >= DEBUG_LPMS) {
+                        printf("R: %d, G: %d, B: %d\n", rgb[0], rgb[1], rgb[2]);
+                        start = (struct timeval){0};
+                        gettimeofday(&start, NULL);
+                        stop = (struct timeval){0};
+                        gettimeofday(&stop, NULL);
+                    }
+                    free(rgb);
+            }
         }
         // error occurred
         else if (readcode < 0) {
@@ -225,21 +262,22 @@ void *fifoloop(void *arg) {
             close(sockfd);
             free(line);
             free(cmd);
-            pthread_mutex_lock(&mutex);
+            pthread_mutex_lock(&exitmsg_mutex);
             exitmsg = "Fifo error";
             cancel_flag = 1;
-            pthread_mutex_unlock(&mutex);
+            pthread_mutex_unlock(&exitmsg_mutex);
             pthread_exit(NULL);
         }
         // EOF (shouldn't happen)
         else {
             // wait 2.5ms for more input
+            // TODO change this lol
+            printf("we here\n");
             usleep(2500);
         }
     }
 
 }
-
 
 int main(int argc, char *argv[]) {
     int option, i, pid;
@@ -258,7 +296,7 @@ int main(int argc, char *argv[]) {
     char errbuf[256];
 
     // handle pre-execution options
-    while ((option = getopt(argc, argv, ":c:h")) != -1) {
+    while ((option = getopt(argc, argv, ":c:hd:")) != -1) {
         switch (option) {
             case 'c':
                 toml_path = optarg;
@@ -267,9 +305,14 @@ int main(int argc, char *argv[]) {
                     exit(EXIT_FAILURE);
                 }
                 break;
+            case 'd':
+                DEBUG = 1;
+                DEBUG_LPMS = atoi(optarg);
+                break;
             case 'h':
                 printf("%s", init_helpmsg);
                 exit(EXIT_SUCCESS);
+                break;
             case ':':
                 perror("Option needs a value");
                 exit(EXIT_FAILURE);
@@ -279,6 +322,10 @@ int main(int argc, char *argv[]) {
                 exit(EXIT_FAILURE);
                 break;
         }
+    }
+
+    if (DEBUG) {
+        printf("Debug mode activated, output will be redirected to this terminal\n");
     }
 
     // read and parse toml file
@@ -301,44 +348,49 @@ int main(int argc, char *argv[]) {
     }
 
     // read toml tables
-    server_toml = toml_table_in(cirl_toml, "server");
-    if (!server_toml) {
-        fprintf(stderr, "Missing [server] table in toml file\n");
-        exit(EXIT_FAILURE);
+    if (!DEBUG) {
+        server_toml = toml_table_in(cirl_toml, "server");
+        if (!server_toml) {
+            fprintf(stderr, TABLE_ERR_STR("server"));
+            exit(EXIT_FAILURE);
+        }
     }
     cava_toml = toml_table_in(cirl_toml, "cava");
     if (!cava_toml) {
-        fprintf(stderr, "Missing [cava] table in toml file\n");
+        fprintf(stderr, TABLE_ERR_STR("cava"));
         exit(EXIT_FAILURE);
     }
     colors_toml = toml_table_in(cirl_toml, "colors");
     if (!colors_toml) {
-        fprintf(stderr, "Missing [colors] table in toml file\n");
+        fprintf(stderr, TABLE_ERR_STR("colors"));
         exit(EXIT_FAILURE);
     }
 
-    // read required values from toml tables
-    ip_server_toml = toml_string_in(server_toml, "ip");
-    if (!ip_server_toml.ok) {
-        fprintf(stderr, "Missing [ip] field in [server] table in toml file\n");
-        exit(EXIT_FAILURE);
-    }
-    else {
-        cinfo.pi_ip = ip_server_toml.u.s;
-    }
-    port_server_toml = toml_int_in(server_toml, "port");
-    #ifdef PORT
-    if (port_server_toml.ok) {
-        #undef PORT
-        #define PORT port_server_toml.u.i;
-    }
-    #endif
-    if (!port_server_toml.ok) {
-        printf("[port] field in [server] table in toml file missing, using default port %s\n", STR(PORT));
+    // server table
+    if (!DEBUG) {
+        ip_server_toml = toml_string_in(server_toml, "ip");
+        if (!ip_server_toml.ok) {
+            fprintf(stderr, FIELD_ERR_STR("ip", "server"));
+            exit(EXIT_FAILURE);
+        }
+        else {
+            cinfo.pi_ip = ip_server_toml.u.s;
+        }
+        port_server_toml = toml_int_in(server_toml, "port");
+        // TODO not correct?
+        #ifdef PORT
+        if (port_server_toml.ok) {
+            #undef PORT
+            #define PORT port_server_toml.u.i;
+        }
+        #endif
+        if (!port_server_toml.ok) {
+            printf("%s, using default port %s\n", FIELD_ERR_STR("port", "server"), STR(PORT));
+        }
     }
     fifo_cava_toml = toml_string_in(cava_toml, "fifo");
     if (!fifo_cava_toml.ok) {
-        fprintf(stderr, "Missing [fifo] field in [cava] table in toml file\n");
+        fprintf(stderr, FIELD_ERR_STR("fifo", "cava"));
         exit(EXIT_FAILURE);
     }
     else {
@@ -357,7 +409,7 @@ int main(int argc, char *argv[]) {
         // read cava config path
         config_cava_toml = toml_string_in(cava_toml, "config");
         if (!config_cava_toml.ok) {
-            fprintf(stderr, "Missing [config] field in [cava] table in toml file\n");
+            fprintf(stderr, FIELD_ERR_STR("config", "cava"));
             cirlkill(pid, EXIT_FAILURE);
         }
         else {
@@ -382,32 +434,27 @@ int main(int argc, char *argv[]) {
             return -1;
         }
     }
-
     // parent: menu + fifo
     else {
-        printf("Initializing processes...\n");
-
         // locking so we can fully/safely initialize tids
-        pthread_mutex_lock(&mutex);
+        pthread_mutex_lock(&pthread_mutex);
         for (i = 0; i < THREAD_COUNT; i++) {
             pthread_attr_init(&attr[i]);
             pthread_status[i] = pthread_create(&tids[i], &attr[i], pthread_funcs[i], NULL);
             pthread_attr_destroy(&attr[i]);
         }
-        pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&pthread_mutex);
 
         // thread creation error check
         for (i = 0; i < THREAD_COUNT; i++) {
             if (pthread_status[i] != 0) {
                 fprintf(stderr, "Could not create threads: %s\n", strerror(pthread_status[i]));
-                pthread_cancel_all(tids, -1, THREAD_COUNT, &mutex);
+                pthread_cancel_all(tids, -1, THREAD_COUNT, &pthread_mutex);
                 cirlkill(pid, EXIT_FAILURE);
             }
         }
 
-        printf("Processes successfully initialized.\n");
-
-        // read solid colors
+        // read solid colors table
         solid_colors_toml = toml_array_in(colors_toml, "solid");
         RGB = calloc(3, sizeof(char));
         if (solid_colors_toml) {
@@ -423,10 +470,11 @@ int main(int argc, char *argv[]) {
             }
         }
         if (!solid_colors_toml || badval) {
+            // TODO magic numbers
             RGB[0] = 51;
             RGB[1] = 255;
             RGB[2] = 194;
-            printf("[solid] field in [colors] table in toml file missing/invalid, using default values %d %d %d\n", RGB[0], RGB[1], RGB[2]);
+            printf("%s, using default values %d %d %d\n", FIELD_ERR_STR("solid", "colors"), RGB[0], RGB[1], RGB[2]);
         }
         badval = 0;
 
@@ -477,10 +525,11 @@ int main(int argc, char *argv[]) {
 
         // sleep until cancel flag is set
         while (1) {
+            // TODO another magic number
             usleep(2500);
             if (cancel_flag) {
                 printf("Exiting: %s\n", exitmsg);
-                pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &mutex);
+                pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &pthread_mutex);
                 free(RGB);
                 cirlkill(pid, EXIT_SUCCESS);
             }

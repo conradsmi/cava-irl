@@ -103,6 +103,18 @@ int processline(char *line, float amplifier, char use_sig) {
     return 0;
 }
 
+unsigned char *getcolors(char *line, unsigned char *rgb_raw, float amplifier, char use_sig) {
+    double peak;
+    unsigned char *rgb = calloc(3, sizeof(char));
+
+    peak = floor(processline(line, amplifier, use_sig) * 0.255);
+    rgb[0] = floor(rgb_raw[0] * (peak / 255));
+    rgb[1] = floor(rgb_raw[1] * (peak / 255));
+    rgb[2] = floor(rgb_raw[2] * (peak / 255));
+ 
+    return rgb;
+}
+
 void getcmd(char *line, unsigned char *rgb, unsigned char **gradient, char GRADIENT,
             int gradient_count, float amplifier, char use_sig, char *cmd) {
     int peak_raw, step_adj_peak, peak;
@@ -139,5 +151,12 @@ void getcmd(char *line, unsigned char *rgb, unsigned char **gradient, char GRADI
     }
     sprintf(cmd, "/usr/local/bin/pigs p 17 %d p 22 %d p 24 %d", r, g, b);
 
+    return rgb;
+}
+
+void getcmd(char *line, unsigned char *rgb_raw, float amplifier, char use_sig, char *cmd) {
+    unsigned char *rgb = getcolors(line, rgb_raw, amplifier, use_sig);
+    sprintf(cmd, "/usr/local/bin/pigs p 17 %d p 22 %d p 24 %d", rgb[0], rgb[1], rgb[2]);
+    free(rgb);
     return;
 }

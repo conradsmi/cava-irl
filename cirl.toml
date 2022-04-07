@@ -11,7 +11,7 @@
 
 [cava]
     config = "/.config/cava/config" # path of cava config file
-    fifo = "/home/conradsmith22/Music/cava_out" # path of cava fifo file
+    fifo = "~/Music/cava_out" # path of cava fifo file
 
 [colors]
     solid = [ 51, 255, 194 ] # should be a valid RGB code
