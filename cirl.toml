@@ -10,8 +10,11 @@
     port = 32816 # port to connect through
 
 [cava]
-    config = "~/.config/cava/config" # path of cava config file
-    fifo = "/home/conrad/Music/cava_out" # path of cava fifo file
+    config = "/.config/cava/config" # path of cava config file
+    fifo = "~/Music/cava_out" # path of cava fifo file
 
 [colors]
-    solid = [ 94, 197, 23 ] # should be a valid RGB code
+    solid = [ 51, 255, 194 ] # should be a valid RGB code
+    gradient = false # false for off (use solid color), true for on
+    gradient1 = [ 255, 0, 0 ]
+    gradient2 = [ 0, 0, 255]

@@ -28,9 +28,11 @@ void *menuloop(void *arg);
 void *fifoloop(void *arg);
 
 // led variables
-unsigned char *RGB; // rgb color
+unsigned char *RGB, **gradient; // rgb colors
 float AMP = 2.0; // see github page for this
-char USE_SIG = 0; // sigmoid mode on/off
+char USE_SIG = 0, GRADIENT = 0; // sigmoid mode on/off, gradient on/off
+int gradient_count = 0;
+
 // general variables
 struct cirl_info cinfo;
 int cancel_flag = 0;
@@ -49,11 +51,12 @@ char helpmsg[] = \
 \"a (num)\" - set contraster (between 1.0000 and 5.0000)\n\
    * makes higher peaks brighter, lower peaks dimmer\n\
 \"c (num) (num) (num)\" - set color (must be RGB value)\n\
+\"g (0 or 1)\" - turn gradient mode on or off\n\
 \"h\" - show this help message\n\
 \"s (0 or 1)\" - toggle sigmoid mode\n\
    * changes the way brightness is calculated. See the github page for details\n\
 \"q\" - exit cirl\n\
-   * NOTE: This does not exit cirlservice; you must turn it off manually within the pi by entering Ctrl+C\n\n";
+   * NOTE: This does not stop the cirlservice daemon\n\n";
 
 char init_helpmsg[] = \
 "\ncava-irl options: \n\
@@ -152,6 +155,9 @@ void *menuloop(void *arg) {
                 case 'c':
                     color(menu_opt, RGB);
                     break;
+                case 'g':
+                    GRADIENT = !GRADIENT;
+                    break;
                 case 's':
                     USE_SIG = setsigmoid(menu_opt, USE_SIG);
                     break;
@@ -232,10 +238,11 @@ void *fifoloop(void *arg) {
             switch (DEBUG) {
                 case 0:
                     // note: benign data race w/ menuloop
-                    getcmd(line, RGB, AMP, USE_SIG, cmd);
+                    getcmd(line, RGB, gradient, GRADIENT, gradient_count, AMP, USE_SIG, cmd);
                     sendall(sockfd, cmd, CMD_SIZE, 0);
                 case 1:
                     // note: another benign data race w/ menuloop
+                    // TODO: fix from gradient
                     rgb = getcolors(line, RGB, AMP, USE_SIG);
                     gettimeofday(&stop, NULL);
                     if ((stop.tv_sec * 1000000 + stop.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec) >= DEBUG_LPMS) {
@@ -279,12 +286,12 @@ int main(int argc, char *argv[]) {
     pthread_attr_t attr[THREAD_COUNT];
     int pthread_status[THREAD_COUNT];
     // cirl config info
-    char *toml_path;
+    char *toml_path, temp_str[MAX_GRADIENT_COUNT_SLEN], gradient_id[MAX_GRADIENT_COUNT_IDLEN];
     FILE *toml_fp = NULL;
     toml_table_t *cirl_toml;
     toml_table_t *server_toml, *cava_toml, *colors_toml;
-    toml_datum_t ip_server_toml, port_server_toml, config_cava_toml, fifo_cava_toml, temp;
-    toml_array_t *solid_colors_toml;
+    toml_datum_t ip_server_toml, port_server_toml, config_cava_toml, fifo_cava_toml, gradient_colors_toml, temp;
+    toml_array_t *solid_colors_toml, *gradientid_colors_toml;
     char badval = 0;
     char errbuf[256];
 
@@ -324,7 +331,7 @@ int main(int argc, char *argv[]) {
     // read and parse toml file
     // use default toml file if given one invalid or not provided
     if (toml_fp == NULL) {
-        snprintf(homedir, BUFFER_SIZE, getenv("HOME"));
+        snprintf(homedir, BUFFER_SIZE, "%s", getenv("HOME"));
         toml_path = strcat(homedir, DEFAULT_CONFIG_PATH);
         if (!(toml_fp = fopen(toml_path, "r"))) {
             printf("%s\n", toml_path);
@@ -399,7 +406,7 @@ int main(int argc, char *argv[]) {
     }
     // child: cava
     else if (pid == 0) {
-        // cava table
+        // read cava config path
         config_cava_toml = toml_string_in(cava_toml, "config");
         if (!config_cava_toml.ok) {
             fprintf(stderr, FIELD_ERR_STR("config", "cava"));
@@ -447,7 +454,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // colors table
+        // read solid colors table
         solid_colors_toml = toml_array_in(colors_toml, "solid");
         RGB = calloc(3, sizeof(char));
         if (solid_colors_toml) {
@@ -469,6 +476,52 @@ int main(int argc, char *argv[]) {
             RGB[2] = 194;
             printf("%s, using default values %d %d %d\n", FIELD_ERR_STR("solid", "colors"), RGB[0], RGB[1], RGB[2]);
         }
+        badval = 0;
+
+        // read gradient colors
+        gradient_colors_toml = toml_bool_in(colors_toml, "gradient");
+        if (!gradient_colors_toml.ok) {
+            fprintf(stderr, "Missing [gradient] field in [colors] table in toml file\n");
+            pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &mutex);
+            free(RGB);
+            cirlkill(pid, EXIT_FAILURE);
+        }
+        else {
+            GRADIENT = gradient_colors_toml.u.b;
+        }
+
+        printf("Loading gradient values...\n");
+        gradient = calloc(MAX_GRADIENT_COUNT, sizeof(unsigned char *));
+        for (int i = 0; i < MAX_GRADIENT_COUNT && !badval; i++) {
+            snprintf(gradient_id, MAX_GRADIENT_COUNT_IDLEN, "%s%d", "gradient", i+1);
+
+            gradientid_colors_toml = toml_array_in(colors_toml, gradient_id);
+            if (!gradientid_colors_toml) {
+                badval = 1;
+            }
+            else {
+                gradient[i] = calloc(3, sizeof(unsigned char));
+                gradient_count++;
+                for (int j = 0; j < 3; j++) {
+                    temp = toml_int_at(gradientid_colors_toml, j);
+                    if (!temp.ok || temp.u.i > 255 || temp.u.i < 0) {
+                        // TODO verify that errno is set appropriately
+                        fprintf(stderr, "Bad value in [%s] field in [colors] table in toml file - %s\n", gradient_id, strerror(errno));
+                        fprintf(stderr, "cirl will only use gradients preceding %s\n", gradient_id);
+                        badval = 1;
+                        free(gradient[i]);
+                        gradient_count--;
+                        break;
+                    }
+                    gradient[i][j] = temp.u.i;
+                }
+            }
+
+            if (i == MAX_GRADIENT_COUNT - 1) {
+                printf("Note: Only first %d gradient values will be used\n", MAX_GRADIENT_COUNT);
+            }
+        }
+        printf("Gradient values loaded. Count: %d\n", gradient_count);
 
         // sleep until cancel flag is set
         while (1) {

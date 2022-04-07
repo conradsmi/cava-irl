@@ -32,9 +32,10 @@ __NOTE:__ This build is in an experimental state; expect some bugs and frequent 
 
     `git clone https://github.com/conradsmi/cava-irl`
 
-   You'll build either "cirl" (if installing on the machine with cava) or "cirlserv" (if installing on your RPI).
+   You'll build either "cirl" (if installing on the machine with cava) or "cirlserv" (if installing on your RPI). You'll also need the TOML C99 package as well, the URL of which will be listed in .gitmodules should the URL in the following example be incorrect.
 
     `cd cava-irl`\
+    `git clone https://github.com/cktan/tomlc99`
     `make cirl` &nbsp; &nbsp; &nbsp; &nbsp; `#or "make cirlserv"`
 
    Finally, execute the install script.

@@ -1,3 +1,6 @@
+CC = gcc
+CFLAGS = -g
+
 OBJS_CLIENT = cirl.o cirlcommon.o led.o tomlc99/toml.o
 OBJS_SERVER = cirlservice.o cirlcommon.o
 $(OBJS_CLIENT) $(OBJS_SERVER): cirlcommon.h
