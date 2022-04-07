@@ -240,6 +240,7 @@ void *fifoloop(void *arg) {
                     // note: benign data race w/ menuloop
                     getcmd(line, RGB, gradient, GRADIENT, gradient_count, AMP, USE_SIG, cmd);
                     sendall(sockfd, cmd, CMD_SIZE, 0);
+                    break;
                 case 1:
                     // note: another benign data race w/ menuloop
                     if (GRADIENT && gradient_count > 1)
@@ -255,6 +256,7 @@ void *fifoloop(void *arg) {
                         gettimeofday(&stop, NULL);
                     }
                     free(rgb);
+                    break;
             }
         }
         // error occurred
