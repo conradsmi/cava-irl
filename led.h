@@ -14,6 +14,6 @@ int processline(char *line, float amplifier, char use_sig);
 
 unsigned char *getcolors(char *line, unsigned char *rgb_raw, float amplifier, char use_sig);
 
-void getcmd(char *line, unsigned char *rgb, float amplifier, char use_sig, char *cmd);
-void getcmd(char *line, unsigned char *rgb, unsigned char **gradient, char GRADIENT,
+void getcmd(char *line, unsigned char *solid_raw, unsigned char **gradient_raw, char GRADIENT,
             int gradient_count, float amplifier, char use_sig, char *cmd);
+// void getcmd(char *line, unsigned char *rgb, float amplifier, char use_sig, char *cmd);

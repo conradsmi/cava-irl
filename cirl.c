@@ -242,8 +242,10 @@ void *fifoloop(void *arg) {
                     sendall(sockfd, cmd, CMD_SIZE, 0);
                 case 1:
                     // note: another benign data race w/ menuloop
-                    // TODO: fix from gradient
-                    rgb = getcolors(line, RGB, AMP, USE_SIG);
+                    if (GRADIENT && gradient_count > 1)
+                        rgb = getgradient(line, gradient, AMP, USE_SIG, gradient_count);
+                    else
+                        rgb = getsolid(line, RGB, AMP, USE_SIG);
                     gettimeofday(&stop, NULL);
                     if ((stop.tv_sec * 1000000 + stop.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec) >= DEBUG_LPMS) {
                         printf("R: %d, G: %d, B: %d\n", rgb[0], rgb[1], rgb[2]);
@@ -482,7 +484,7 @@ int main(int argc, char *argv[]) {
         gradient_colors_toml = toml_bool_in(colors_toml, "gradient");
         if (!gradient_colors_toml.ok) {
             fprintf(stderr, "Missing [gradient] field in [colors] table in toml file\n");
-            pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &mutex);
+            pthread_cancel_all(tids, cancel_flag, THREAD_COUNT, &pthread_mutex);
             free(RGB);
             cirlkill(pid, EXIT_FAILURE);
         }
